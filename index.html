@@ -1,0 +1,701 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Hen Haul</title>
+<meta name="description" content="Drive a wobbly farm truck full of chickens over wild hills. Every bump can launch them. Deliver as many as you can.">
+<meta name="theme-color" content="#ffb36b">
+<meta property="og:title" content="Hen Haul">
+<meta property="og:description" content="Drive a wobbly farm truck full of chickens over wild hills. How many can you deliver?">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ffb36b'/%3E%3Crect x='8' y='30' width='48' height='14' rx='4' fill='%23d62828'/%3E%3Ccircle cx='18' cy='46' r='7' fill='%23222'/%3E%3Ccircle cx='46' cy='46' r='7' fill='%23222'/%3E%3Ccircle cx='22' cy='24' r='8' fill='%23fff'/%3E%3Cpath d='M20 15l2-4 2 4z' fill='%23e63946'/%3E%3C/svg%3E">
+<style>
+  :root{ --panel:rgba(255,250,240,.97); --ink:#2b1d14; --muted:#7a6250; --red:#d62828; --gold:#f4a300; --green:#2a9d55; --line:rgba(43,29,20,.14); }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:#ffb36b;overflow:hidden;color:var(--ink);
+    font-family:ui-rounded,"SF Pro Rounded","Nunito",system-ui,-apple-system,"Segoe UI",sans-serif;
+    -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:none}
+  canvas{display:block;position:fixed;inset:0}
+  button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+  .screen{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(60,30,10,.35);backdrop-filter:blur(3px);z-index:3;overflow-y:auto}
+  .screen.on{display:flex}
+  .card{width:100%;max-width:390px;margin:auto;background:var(--panel);border-radius:22px;padding:24px 20px;text-align:center;box-shadow:0 18px 60px rgba(60,30,10,.35)}
+  h1{font-size:46px;font-weight:900;line-height:.95;color:var(--red);letter-spacing:.5px}
+  h1 span{color:var(--gold)}
+  h2{font-size:26px;font-weight:900}
+  .tag{color:var(--muted);margin:10px 0 18px;line-height:1.45}
+  .btn{display:block;width:100%;padding:15px;border-radius:14px;margin-top:10px;font-weight:900;font-size:17px;background:#fff;border:2px solid var(--line);transition:transform .08s}
+  .btn:active{transform:scale(.97)}
+  .btn.primary{background:var(--red);color:#fff;border-color:transparent}
+  .btn.ad{background:var(--green);color:#fff;border-color:transparent}
+  .btn small{display:block;font-size:12px;font-weight:700;opacity:.8}
+  .stats{display:flex;justify-content:center;gap:18px;margin-top:16px;color:var(--muted);font-size:13px}
+  .stats b{display:block;color:var(--ink);font-size:20px}
+  .big{font-size:52px;font-weight:900;line-height:1;margin:6px 0}
+  .sub{color:var(--muted)}
+  .row{display:flex;gap:10px}.row .btn{flex:1}
+  .link{margin-top:14px;color:var(--muted);font-size:13px;display:block;margin-left:auto;margin-right:auto}
+  .shop{display:grid;gap:8px;margin-top:14px;text-align:left}
+  .item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;background:#fff;border:1px solid var(--line)}
+  .item .ic{font-size:24px;width:34px;text-align:center}
+  .item .t{flex:1}.item .t b{display:block;font-size:15px}.item .t small{color:var(--muted);font-size:12px}
+  .pips{display:flex;gap:3px;margin-top:4px}.pips i{width:12px;height:5px;border-radius:3px;background:var(--line)}.pips i.on{background:var(--gold)}
+  .item button{min-width:84px;padding:9px 8px;border-radius:10px;font-weight:900;background:var(--gold);color:#3a2600}
+  .item button:disabled{background:#eee;color:#aaa}
+  #ad{position:fixed;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;background:#000;color:#fff;z-index:9;text-align:center;padding:16px}
+  #ad.on{display:flex}#ad .t{font-size:13px;color:#888}#ad .n{font-size:40px;font-weight:900}
+  #toast{position:fixed;left:50%;top:calc(80px + env(safe-area-inset-top));transform:translateX(-50%);background:#fff;color:#111;padding:10px 16px;border-radius:12px;font-weight:800;opacity:0;transition:opacity .25s;pointer-events:none;z-index:8;white-space:nowrap}
+  #pauseBtn{position:fixed;right:12px;top:calc(12px + env(safe-area-inset-top));width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.7);font-size:14px;display:none;z-index:2}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<button id="pauseBtn" aria-label="Pause">❚❚</button>
+
+<div id="menu" class="screen on"><div class="card">
+  <h1>HEN<br><span>HAUL</span></h1>
+  <p class="tag">Drive the farm truck over the hills.<br>Every bump can launch your chickens.<br>Deliver as many as you can.</p>
+  <button class="btn primary" id="playBtn">Drive</button>
+  <button class="btn" id="dailyBtn">Daily Route</button>
+  <button class="btn" id="garageBtn">Garage</button>
+  <div class="stats"><div><b id="mBest">0 m</b>best</div><div><b id="mCoins">0</b>coins</div><div><b id="mHens">0</b>best haul</div></div>
+  <p class="link">Right side / → to drive · left side / ← to brake.<br>In the air they tilt the truck: land on your wheels!</p>
+  <button class="link" id="muteBtn">Sound: on</button>
+</div></div>
+
+<div id="over" class="screen"><div class="card">
+  <div class="sub" id="oTitle">Crashed!</div>
+  <div class="big" id="oDist">0 m</div>
+  <div class="sub" id="oBest"></div>
+  <div class="stats"><div><b id="oHens">0</b>🐔 delivered</div><div><b id="oFlips">0</b>flips</div><div><b id="oCoins">0</b>coins</div></div>
+  <button class="btn ad" id="reviveBtn">Back on your wheels<small>Watch a short ad · keep your chickens</small></button>
+  <button class="btn ad" id="doubleBtn">Double your coins<small>Watch a short ad</small></button>
+  <button class="btn primary" id="againBtn">Drive again</button>
+  <button class="btn" id="shareBtn">Share</button>
+  <div class="row"><button class="btn" id="oGarageBtn">Garage</button><button class="btn" id="oMenuBtn">Menu</button></div>
+</div></div>
+
+<div id="garage" class="screen"><div class="card">
+  <h2>Garage</h2>
+  <div class="sub">You have <b id="gCoins">0</b> 🪙</div>
+  <div class="shop" id="shop"></div>
+  <button class="btn" id="gBackBtn">Back</button>
+</div></div>
+
+<div id="paused" class="screen"><div class="card">
+  <h2>Paused</h2>
+  <button class="btn primary" id="resumeBtn">Keep driving</button>
+  <button class="btn" id="quitBtn">End the run</button>
+</div></div>
+
+<div id="ad"><div class="t">AD PLACEHOLDER</div><div class="n" id="adN">3</div><div class="t">A portal ad (CrazyGames / Poki) plays here</div></div>
+<div id="toast"></div>
+
+<script>
+(() => {
+'use strict';
+
+/* ================= Portal / ads adapter (same contract as our other games) ================= */
+const Portal = {
+  gameplayStart(){}, gameplayStop(){},
+  rewarded(){ return fakeAd(); },
+  interstitial(){ return fakeAd(); },
+};
+function fakeAd(){
+  return new Promise(res => {
+    Sound.engine(false);
+    const el = $('ad'), n = $('adN'); let s = 3; n.textContent = s; el.classList.add('on');
+    const iv = setInterval(() => { s--; n.textContent = s; if (s <= 0){ clearInterval(iv); el.classList.remove('on'); res(true); } }, 1000);
+  });
+}
+
+/* ================= Helpers ================= */
+const $ = id => document.getElementById(id);
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+function mulberry32(a){ return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function dayKey(d = new Date()){ return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+const EPOCH = new Date(2026, 9, 29);
+function dailyNumber(){ const t = new Date(); t.setHours(0, 0, 0, 0); return Math.round((t - EPOCH) / 864e5) + 1; }
+function toast(m){ const t = $('toast'); t.textContent = m; t.style.opacity = 1; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.opacity = 0, 1500); }
+const PX_PER_M = 20;
+const meters = x => Math.max(0, Math.floor(x / PX_PER_M));
+
+/* ================= Save ================= */
+const SAVE_KEY = 'henhaul.v1';
+const save = Object.assign({ coins: 0, best: 0, bestHens: 0, up: {}, muted: false, daily: {}, runs: 0 },
+  (() => { try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || {}; } catch(e){ return {}; } })());
+function persist(){ try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch(e){} }
+const up = id => save.up[id] || 0;
+const UPGRADES = [
+  { id: 'engine', name: 'Engine',      ic: '⚙️', desc: 'More power for steep hills',        base: 40, grow: 1.7, max: 8 },
+  { id: 'susp',   name: 'Suspension',  ic: '🛞', desc: 'Softer ride, fewer launched hens',   base: 35, grow: 1.7, max: 6 },
+  { id: 'crate',  name: 'Crate walls', ic: '🧱', desc: 'Taller tailgate holds hens in',      base: 50, grow: 1.8, max: 5 },
+  { id: 'coop',   name: 'Bigger coop', ic: '🐔', desc: '+1 chicken per load',                 base: 60, grow: 1.8, max: 6 },
+  { id: 'tank',   name: 'Fuel tank',   ic: '⛽', desc: '+25% fuel',                           base: 30, grow: 1.6, max: 6 },
+];
+const upCost = u => Math.round(u.base * Math.pow(u.grow, up(u.id)));
+
+/* ================= Sound ================= */
+const Sound = (() => {
+  let A = null, master = null, noise = null, eng = null, engGain = null, engOn = false;
+  function init(){
+    if (A){ if (A.state === 'suspended') A.resume(); return; }
+    try {
+      A = new (window.AudioContext || window.webkitAudioContext)();
+      const comp = A.createDynamicsCompressor(); master = A.createGain(); master.gain.value = save.muted ? 0 : .5; master.connect(comp); comp.connect(A.destination);
+      noise = A.createBuffer(1, A.sampleRate, A.sampleRate); const d = noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      eng = A.createOscillator(); eng.type = 'sawtooth'; eng.frequency.value = 50;
+      const lp = A.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420;
+      engGain = A.createGain(); engGain.gain.value = 0; eng.connect(lp).connect(engGain).connect(master); eng.start();
+    } catch(e){ A = null; }
+  }
+  const ok = () => A && master && !save.muted;
+  function note(f, type, v, dur, delay = 0, slide = 0){
+    const t = A.currentTime + delay, o = A.createOscillator(), g = A.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t); if (slide) o.frequency.exponentialRampToValueAtTime(f * slide, t + dur);
+    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(v, t + .01); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    o.connect(g).connect(master); o.start(t); o.stop(t + dur + .02);
+  }
+  function hiss(v, dur, freq){ const t = A.currentTime, s = A.createBufferSource(), f = A.createBiquadFilter(), g = A.createGain(); s.buffer = noise; f.type = 'lowpass'; f.frequency.value = freq; g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(.0001, t + dur); s.connect(f).connect(g).connect(master); s.start(t); s.stop(t + dur + .02); }
+  return {
+    init, setMuted(m){ if (master) master.gain.value = m ? 0 : .5; },
+    engine(on, speed = 0, gas = 0){ if (!eng) return; const t = A.currentTime; engOn = on && !save.muted; engGain.gain.setTargetAtTime(engOn ? .05 + gas * .07 : 0, t, .08); eng.frequency.setTargetAtTime(42 + speed * .09 + gas * 26, t, .1); },
+    cluck(){ if (!ok()) return; const b = 700 + Math.random() * 300; note(b, 'square', .06, .07, 0, 1.4); note(b * 1.25, 'square', .05, .09, .08, .7); },
+    coin(){ if (ok()) { note(1500, 'square', .03, .05); note(2000, 'square', .03, .08, .05); } },
+    deliver(n){ if (!ok()) return; [0, 4, 7, 12, 16].slice(0, 2 + Math.min(3, n)).forEach((s, k) => note(523 * Math.pow(2, s / 12), 'triangle', .1, .25, k * .07)); },
+    flip(){ if (ok()) [0, 7, 12].forEach((s, k) => note(660 * Math.pow(2, s / 12), 'sine', .08, .2, k * .06)); },
+    fuel(){ if (ok()) note(300, 'sine', .08, .25, 0, 2); },
+    land(v){ if (ok()) hiss(Math.min(.3, v * .0006), .15, 500); },
+    crash(){ if (!ok()) return; hiss(.4, .6, 1200); note(110, 'sawtooth', .2, .5, 0, .4); },
+  };
+})();
+
+/* ================= Terrain ================= */
+const SEG = 40;              // terrain control points every 40px
+let T = null;                // { pts, rng, cursor, y, stations, cans, coins }
+function newTerrain(seed){
+  T = { pts: [], rng: mulberry32(seed), stations: [], cans: [], coins: [], y: 0 };
+  for (let i = 0; i < 25; i++) T.pts.push(0);
+  let sx = 120, gap = 170;
+  for (let k = 0; k < 60; k++){ T.stations.push({ x: sx * PX_PER_M, done: false, idx: k }); sx += gap; gap += 45; }
+}
+const nearStation = x => T.stations.some(s => Math.abs(s.x - x) < 26 * SEG);
+function extendTerrain(toIdx){
+  const r = T.rng;
+  while (T.pts.length <= toIdx){
+    const i0 = T.pts.length, x0 = i0 * SEG, d = clamp(x0 / (2200 * PX_PER_M), 0, 1);
+    let y = T.pts[i0 - 1];
+    const steep = 20 + 15 * d;                       // hills start gentle and get steeper the further you go
+    const push = v => { const last = T.pts[T.pts.length - 1]; T.pts.push(last + clamp(v - last, -steep, steep)); };
+    if (nearStation(x0 + 8 * SEG)){ for (let k = 0; k < 14; k++) push(y); }
+    else {
+      const t = r();
+      if (t < .32){                                   // rolling hills
+        const n = 14 + Math.floor(r() * 18), A = 30 + r() * (70 + 150 * d), wl = 8 + Math.floor(r() * 10), ph = r() * TAU;
+        for (let k = 0; k < n; k++) push(y + A * (Math.sin(ph + k / wl * TAU) - Math.sin(ph)));
+      } else if (t < .5){                             // ramp you can jump off
+        const n = 6 + Math.floor(r() * 5), hgt = 50 + r() * (60 + 110 * d);
+        for (let k = 1; k <= n; k++) push(y - hgt * k / n);
+        const drop = 3 + Math.floor(r() * 3); for (let k = 1; k <= drop; k++) push(y - hgt + (hgt + 20 + r() * 60 * d) * k / drop);
+        for (let k = 0; k < 4; k++) push(T.pts[T.pts.length - 1]);
+      } else if (t < .66 && x0 > 60 * PX_PER_M){      // washboard bumps: chickens hate these
+        const n = 8 + Math.floor(r() * 10), A = 6 + r() * (6 + 12 * d);
+        for (let k = 0; k < n; k++) push(y + (k % 2 ? -A : A * .3));
+      } else if (t < .84){                            // long climb or descent
+        const n = 12 + Math.floor(r() * 18), dir = r() < .55 ? -1 : 1, hgt = 80 + r() * (120 + 300 * d);
+        for (let k = 1; k <= n; k++) push(y + dir * hgt * (1 - Math.cos(k / n * Math.PI)) / 2);
+      } else {                                        // breather
+        const n = 6 + Math.floor(r() * 8); for (let k = 0; k < n; k++) push(y + Math.sin(k / n * Math.PI) * 10);
+      }
+    }
+    // pickups along the new stretch
+    for (let i = i0; i < T.pts.length; i++){
+      const x = i * SEG;
+      if (i % 100 === 50 && !nearStation(x)) T.cans.push({ x, got: false });
+      if (i % 9 === 0 && r() < .5 && !nearStation(x)) for (let k = 0; k < 5; k++) T.coins.push({ x: x + k * 26, got: false, lift: 34 });
+    }
+  }
+}
+function groundY(x){
+  if (x < 0) return T.pts[0];
+  const i = Math.floor(x / SEG); if (i + 2 >= T.pts.length) extendTerrain(i + 200);
+  const f = x / SEG - i, k = (1 - Math.cos(f * Math.PI)) / 2;
+  return T.pts[i] * (1 - k) + T.pts[i + 1] * k;
+}
+function groundNormal(x){ const s = (groundY(x + 2) - groundY(x - 2)) / 4, m = Math.hypot(s, 1); return { x: s / m, y: -1 / m }; }
+
+/* ================= Truck ================= */
+// local frame: x forward, y down; chassis body spans y -13..13
+const WHEEL_R = 17, MOUNTS = [[-36, 15], [38, 15]], REST = 13;
+const BED = { x0: -60, x1: -3, floor: -13 };
+const HEN_R = 6.2;
+let G = null, rng = Math.random, screen = 'menu', paused = false, runsSinceAd = 0;
+const input = { gas: 0, brake: 0 };
+const stats = () => ({
+  power: 1450 * (1 + up('engine') * .13), top: 520 + up('engine') * 45,
+  ku: 125, cu: 9 + up('susp') * 3.2, wall: 15 + up('crate') * 6, cap: 5 + up('coop'), tank: 100 * (1 + up('tank') * .25),
+});
+function newRun(daily = false){
+  const seed = daily ? (dailyNumber() * 2654435761) >>> 0 : (Math.random() * 4294967296) >>> 0;
+  newTerrain(seed); extendTerrain(400);
+  const S = stats();
+  const y0 = groundY(200) - 40;
+  G = { daily, S, c: { x: 200, y: y0, a: 0, vx: 0, vy: 0, w: 0 }, wheels: MOUNTS.map(([mx, my]) => ({ x: 200 + mx, y: y0 + my + REST, vx: 0, vy: 0, rot: 0, ground: false })),
+        hens: [], fuel: S.tank, coins: 0, delivered: 0, flips: 0, airRot: 0, airT: 0, crashed: false, over: false, revived: false, doubled: false,
+        t: 0, parts: [], texts: [], cam: { x: 200, y: y0 }, shake: 0, upsideT: 0, stopT: 0, maxX: 200, reason: '', lostAt: [], banner: null };
+  loadHens();
+}
+const toWorld = (lx, ly) => { const c = G.c, cs = Math.cos(c.a), sn = Math.sin(c.a); return { x: c.x + lx * cs - ly * sn, y: c.y + lx * sn + ly * cs }; };
+const toLocal = (x, y) => { const c = G.c, cs = Math.cos(c.a), sn = Math.sin(c.a), dx = x - c.x, dy = y - c.y; return { x: dx * cs + dy * sn, y: -dx * sn + dy * cs }; };
+const pointVel = (px, py) => ({ x: G.c.vx - G.c.w * (py - G.c.y), y: G.c.vy + G.c.w * (px - G.c.x) });
+function loadHens(){
+  const n = G.S.cap - G.hens.filter(h => h.aboard).length;
+  for (let k = 0; k < n; k++){
+    const lx = BED.x0 + HEN_R + 2 + (k % 4) * (HEN_R * 2 + 1.5), ly = BED.floor - HEN_R - .5 - Math.floor(k / 4) * (HEN_R * 2 + .5);
+    const p = toWorld(lx, ly), v = pointVel(p.x, p.y);
+    G.hens.push({ x: p.x, y: p.y, px: p.x - v.x / 480, py: p.y - v.y / 480, aboard: true, loose: false, face: 1, flap: 0, id: Math.random() });
+  }
+}
+
+/* ================= Physics step ================= */
+const GRAV = 900, M = 1, I = 1150, MW = .3;
+function stepPhysics(h){
+  const c = G.c, S = G.S, cs = Math.cos(c.a), sn = Math.sin(c.a);
+  const ux = -sn, uy = cs, lx = cs, ly = sn;          // chassis "down" axis and forward axis in world
+  let fcx = 0, fcy = GRAV * M, torque = 0;
+  const gas = G.fuel > 0 ? input.gas : 0;
+  // suspension springs
+  G.wheels.forEach((w, i) => {
+    const [mx, my] = MOUNTS[i];
+    const P = toWorld(mx, my), tx = P.x + ux * REST, ty = P.y + uy * REST;
+    const dx = w.x - tx, dy = w.y - ty, vP = pointVel(P.x, P.y), rvx = w.vx - vP.x, rvy = w.vy - vP.y;
+    const dl = dx * lx + dy * ly, du = dx * ux + dy * uy, vl = rvx * lx + rvy * ly, vu = rvx * ux + rvy * uy;
+    const fl = -(900 * dl + 30 * vl), fu = -(S.ku * du + S.cu * vu);
+    const Fx = fl * lx + fu * ux, Fy = fl * ly + fu * uy;
+    w.vx += Fx / MW * h; w.vy += (Fy / MW + GRAV) * h;
+    fcx -= Fx; fcy -= Fy; torque += (P.x - c.x) * (-Fy) - (P.y - c.y) * (-Fx);
+  });
+  // engine reaction tilts the nose up under power, down under braking
+  const grounded = G.wheels.some(w => w.ground);
+  if (grounded) torque += (-gas * 700 + input.brake * 700);
+  else torque += (-gas + input.brake) * 5200;          // air control
+  c.vx += fcx / M * h; c.vy += fcy / M * h; c.w += torque / I * h;
+  c.vx *= 1 - .04 * h; c.vy *= 1 - .04 * h;
+  c.w = clamp(c.w, -9, 9); c.w *= grounded ? Math.pow(.25, h) : Math.pow(.7, h);
+  c.x += c.vx * h; c.y += c.vy * h; c.a += c.w * h;
+
+  // wheels against the ground: push out, kill inward speed, then drive/brake along the surface
+  for (const w of G.wheels){
+    w.x += w.vx * h; w.y += w.vy * h;
+    const gy = groundY(w.x), n = groundNormal(w.x), dist = (gy - w.y) * -n.y;
+    w.ground = dist < WHEEL_R + 1.5;
+    if (dist < WHEEL_R){
+      const pen = WHEEL_R - dist; w.x += n.x * pen; w.y += n.y * pen;
+      const vn = w.vx * n.x + w.vy * n.y;
+      if (vn < 0){ if (vn < -260) Sound.land(-vn); w.vx -= vn * 1.1 * n.x; w.vy -= vn * 1.1 * n.y; }
+      const tx = -n.y, ty = n.x;                        // surface tangent, pointing forward (right)
+      let vt = w.vx * tx + w.vy * ty, acc = 0;
+      if (gas){ acc = vt < S.top ? S.power * gas : 0; }
+      else if (input.brake){ acc = vt > 20 ? -2200 : (vt > -S.top * .4 ? -S.power * .5 : 0); }
+      vt += acc * h; vt *= Math.pow(.9, h);
+      const vtNow = w.vx * tx + w.vy * ty; w.vx += (vt - vtNow) * tx; w.vy += (vt - vtNow) * ty;
+    }
+    w.rot += ((w.vx * (-n.y) + w.vy * n.x) / WHEEL_R) * h;
+  }
+
+  // the body itself must not sink into a hill; the cab roof touching down is a crash
+  const pts = [[-58, 13], [56, 10], [-58, -13], [56, -8]];
+  for (const [px, py] of pts){
+    const p = toWorld(px, py), gy = groundY(p.x);
+    if (p.y > gy){
+      const n = groundNormal(p.x), pen = (p.y - gy) * -n.y;
+      c.x += n.x * pen; c.y += n.y * pen;
+      const v = pointVel(p.x, p.y), vn = v.x * n.x + v.y * n.y;
+      if (vn < 0){
+        const rx = p.x - c.x, ry = p.y - c.y, rn = rx * n.y - ry * n.x, j = -vn * 1.2 / (1 / M + rn * rn / I);
+        c.vx += j * n.x / M; c.vy += j * n.y / M; c.w += rn * j / I;
+      }
+    }
+  }
+  const head = toWorld(18, -44), head2 = toWorld(4, -40);
+  if (!G.crashed && (head.y > groundY(head.x) || head2.y > groundY(head2.x))) crash('Flipped onto the roof');
+}
+
+// chickens: verlet points that ride in the bed until a bump throws them out
+function stepHens(h){
+  const c = G.c, wall = G.S.wall;
+  for (const e of G.hens){
+    const vx = (e.x - e.px), vy = (e.y - e.py);
+    e.px = e.x; e.py = e.y;
+    e.x += vx * .998; e.y += vy * .998 + GRAV * h * h;
+    let L = toLocal(e.x, e.y), touched = false;
+    const insideX = L.x > BED.x0 - 2 && L.x < BED.x1 + 2;
+    // floor
+    if (insideX && L.y > BED.floor - HEN_R && L.y < 6){ L.y = BED.floor - HEN_R; touched = true; }
+    // tailgate (height depends on the Crate upgrade) and the cab's back wall
+    if (L.y > BED.floor - wall && L.x < BED.x0 + HEN_R && L.x > BED.x0 - 6){ L.x = BED.x0 + HEN_R; touched = true; }
+    if (L.y > -44 && L.x > BED.x1 - HEN_R && L.x < BED.x1 + 8){ L.x = BED.x1 - HEN_R; touched = true; }
+    // landing on the cab roof or hood
+    if (L.x >= BED.x1 + 8 && L.x < 58 && L.y > (L.x < 40 ? -44 : -10) - HEN_R && L.y < 10){ L.y = (L.x < 40 ? -44 : -10) - HEN_R; touched = true; }
+    if (touched){
+      const p = toWorld(L.x, L.y); e.x = p.x; e.y = p.y;
+      // friction: drag the hen's velocity toward the truck's at that point
+      const v = pointVel(e.x, e.y), hvx = (e.x - e.px) / h, hvy = (e.y - e.py) / h;
+      const nvx = v.x + (hvx - v.x) * .9, nvy = v.y + (hvy - v.y) * .9;
+      e.px = e.x - nvx * h; e.py = e.y - nvy * h;
+    }
+    // ground for hens that fell off
+    const gy = groundY(e.x);
+    if (e.y > gy - HEN_R){ e.y = gy - HEN_R; e.px = e.x - (e.x - e.px) * .5; e.py = e.y; if (!e.aboard) e.loose = true; }
+  }
+  // hens push each other
+  for (let i = 0; i < G.hens.length; i++) for (let j = i + 1; j < G.hens.length; j++){
+    const a = G.hens[i], b = G.hens[j]; if (a.loose || b.loose) continue;
+    const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy), min = HEN_R * 2;
+    if (d > 0 && d < min){ const k = (min - d) / d * .5; a.x -= dx * k; a.y -= dy * k; b.x += dx * k; b.y += dy * k; }
+  }
+}
+
+/* ================= Game update ================= */
+function update(dt){
+  if (!G || G.over) return;
+  G.t += dt;
+  const S = G.S, c = G.c;
+  const sub = 8, h = dt / sub;
+  for (let k = 0; k < sub; k++){ stepPhysics(h); stepHens(h); }
+  if (![c.x, c.y, c.vx, c.vy, c.a, c.w].every(Number.isFinite)) { crash('The truck fell apart'); return; }
+
+  // fuel
+  G.fuel = Math.max(0, G.fuel - (input.gas ? 4.6 : .5) * dt);
+  // which hens are still in the bed
+  for (const e of G.hens){
+    if (e.loose) { e.aboard = false; continue; }
+    const L = toLocal(e.x, e.y);
+    const inBed = L.x > BED.x0 - 4 && L.x < BED.x1 + 4 && L.y < BED.floor + 2 && L.y > BED.floor - G.S.wall - 70;
+    if (e.aboard && !inBed && (L.x < BED.x0 - 22 || L.y < BED.floor - G.S.wall - 70 || L.x > 70)){ e.aboard = false; Sound.cluck(); G.texts.push({ x: e.x, y: e.y - 20, v: 'BAWK!', life: 1, c: '#fff' }); }
+    else if (!e.aboard && !e.loose && inBed && L.y > BED.floor - G.S.wall) e.aboard = true;   // caught it!
+    e.flap = e.aboard && Math.abs(e.y - e.py) < .4 ? 0 : (e.flap + dt * 20);
+  }
+  // drop hens far behind
+  G.hens = G.hens.filter(e => e.aboard || e.x > c.x - 2000);
+
+  // flips: count full turns while airborne, pay out on a clean landing
+  const air = !G.wheels.some(w => w.ground);
+  if (air){ G.airT += dt; G.airRot += c.w * dt; }
+  else {
+    if (G.airT > .3 && Math.abs(G.airRot) > TAU * .85 && !G.crashed){
+      const n = Math.round(Math.abs(G.airRot) / TAU); G.flips += n; G.coins += 15 * n;
+      G.banner = { text: n > 1 ? `${n}× FLIP!` : (G.airRot < 0 ? 'BACKFLIP!' : 'FRONTFLIP!'), life: 1.4 }; Sound.flip();
+    } else if (G.airT > 1.1 && !G.crashed){ G.banner = { text: 'BIG AIR', life: 1 }; G.coins += 3; }
+    G.airT = 0; G.airRot = 0;
+  }
+
+  // pickups
+  for (const k of T.coins){ if (k.got || Math.abs(k.x - c.x) > 80) continue; const ky = groundY(k.x) - k.lift; if (Math.hypot(k.x - c.x, ky - c.y) < 60){ k.got = true; G.coins++; Sound.coin(); } }
+  for (const f of T.cans){ if (f.got || Math.abs(f.x - c.x) > 70) continue; if (Math.abs(groundY(f.x) - 20 - c.y) < 80){ f.got = true; G.fuel = S.tank; Sound.fuel(); G.texts.push({ x: f.x, y: groundY(f.x) - 60, v: 'FUEL!', life: 1.2, c: '#2a9d55' }); } }
+  for (const s of T.stations){
+    if (s.done || c.x < s.x) continue;
+    s.done = true;
+    const n = G.hens.filter(e => e.aboard).length;
+    const pay = n * (10 + s.idx * 3);
+    G.delivered += n; G.coins += pay; G.fuel = S.tank;
+    G.banner = { text: n ? `${n} 🐔 DELIVERED  +${pay}` : 'NO CHICKENS LEFT!', life: 2 };
+    Sound.deliver(n);
+    G.hens = G.hens.filter(e => !e.aboard);
+    loadHens();
+  }
+  G.maxX = Math.max(G.maxX, c.x);
+
+  // stuck: upside down, or out of fuel and stopped
+  const speed = Math.hypot(c.vx, c.vy);
+  const upright = Math.cos(c.a);
+  G.upsideT = upright < -.2 && !air ? G.upsideT + dt : 0;
+  if (G.upsideT > 1.2 && !G.crashed) crash('Stuck on its back');
+  G.stopT = G.fuel <= 0 && speed < 15 ? G.stopT + dt : 0;
+  if (G.stopT > 1.5 && !G.crashed) crash('Out of fuel');
+
+  for (const p of G.parts){ p.vy += GRAV * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt; }
+  G.parts = G.parts.filter(p => p.life > 0);
+  for (const t of G.texts){ t.y -= 40 * dt; t.life -= dt; }
+  G.texts = G.texts.filter(t => t.life > 0);
+  if (G.banner){ G.banner.life -= dt; if (G.banner.life <= 0) G.banner = null; }
+  G.shake *= Math.pow(.01, dt);
+  Sound.engine(true, speed, input.gas && G.fuel > 0 ? 1 : 0);
+}
+// camera: smooth, but never lets the truck get near the edge of the screen (fast descents used to lose it)
+function moveCamera(dt){
+  const c = G.c, lead = clamp(c.vx * .25, -60, 220);
+  G.cam.x += (c.x + lead - G.cam.x) * Math.min(1, dt * 4);
+  G.cam.y += (c.y - 60 - G.cam.y) * Math.min(1, dt * 3);
+  const mx = VW / scale * .28, my = VH / scale * .2;
+  G.cam.x = clamp(G.cam.x, c.x + lead - mx, c.x + lead + mx);
+  G.cam.y = clamp(G.cam.y, c.y - 60 - my, c.y - 60 + my);
+}
+function crash(reason){
+  if (G.crashed) return;
+  G.crashed = true; G.reason = reason; G.shake = 16; Sound.crash(); Sound.engine(false);
+  const c = G.c; for (let k = 0; k < 30; k++){ const a = Math.random() * TAU, s = 80 + Math.random() * 260; G.parts.push({ x: c.x, y: c.y - 20, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 200, life: .8 + Math.random() * .6, c: Math.random() < .5 ? '#fff' : '#d62828', s: 3 + Math.random() * 4 }); }
+  for (const e of G.hens) if (e.aboard){ e.aboard = false; e.px = e.x - (Math.random() - .5) * 8; e.py = e.y + 6; }
+  Portal.gameplayStop();
+  setTimeout(() => { if (G && G.crashed && !G.over) showOver(); }, 1100);
+}
+
+/* ================= Drawing ================= */
+const cvs = $('c'), ctx = cvs.getContext('2d');
+let dpr = 1, VW = 0, VH = 0, scale = 1;
+function resize(){
+  dpr = Math.min(window.devicePixelRatio || 1, 2); VW = innerWidth; VH = innerHeight;
+  cvs.width = VW * dpr; cvs.height = VH * dpr; cvs.style.width = VW + 'px'; cvs.style.height = VH + 'px';
+  scale = clamp(Math.min(VW / 620, VH / 470), .55, 1.3);     // portrait phones zoom in a bit
+}
+addEventListener('resize', resize); resize();
+function rr(x, y, w, h, r){ ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+
+function drawHen(e, t){
+  ctx.save(); ctx.translate(e.x, e.y);
+  const tilt = e.aboard ? 0 : Math.sin(t * 9 + e.id * 10) * .5; ctx.rotate(tilt);
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(0, 0, HEN_R * 1.1, HEN_R, 0, 0, TAU); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,.12)'; ctx.lineWidth = 1; ctx.stroke();
+  // wing flaps when airborne
+  const fl = e.flap ? Math.sin(e.flap) * .9 : 0;
+  ctx.fillStyle = '#efe6d8'; ctx.beginPath(); ctx.ellipse(-2, 1, 5, 3.4, -.3 - fl, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#e63946'; ctx.beginPath(); ctx.arc(4, -HEN_R + 1, 2.4, 0, TAU); ctx.arc(6.5, -HEN_R + 2, 2, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#f4a300'; ctx.beginPath(); ctx.moveTo(HEN_R + 1, -2); ctx.lineTo(HEN_R + 5, 0); ctx.lineTo(HEN_R + 1, 1.5); ctx.fill();
+  ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(5, -2.5, 1.2, 0, TAU); ctx.fill();
+  if (e.loose){ ctx.fillStyle = '#f4a300'; ctx.fillRect(-2, HEN_R - 1, 1.5, 3); ctx.fillRect(2, HEN_R - 1, 1.5, 3); }
+  ctx.restore();
+}
+function drawTruck(){
+  const c = G.c;
+  // wheels first
+  for (const w of G.wheels){
+    ctx.save(); ctx.translate(w.x, w.y); ctx.rotate(w.rot);
+    ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(0, 0, WHEEL_R, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#9aa0a6'; ctx.beginPath(); ctx.arc(0, 0, WHEEL_R * .5, 0, TAU); ctx.fill();
+    ctx.strokeStyle = '#555'; ctx.lineWidth = 2.5; for (let k = 0; k < 4; k++){ ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(k * TAU / 4) * WHEEL_R * .5, Math.sin(k * TAU / 4) * WHEEL_R * .5); ctx.stroke(); }
+    ctx.restore();
+  }
+  ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.a);
+  // suspension struts
+  ctx.strokeStyle = '#444'; ctx.lineWidth = 4;
+  G.wheels.forEach((w, i) => { const L = toLocal(w.x, w.y); ctx.beginPath(); ctx.moveTo(MOUNTS[i][0], MOUNTS[i][1] - 4); ctx.lineTo(L.x, L.y); ctx.stroke(); });
+  // body
+  ctx.fillStyle = '#d62828'; rr(-60, -13, 118, 26, 8); ctx.fill();
+  ctx.fillStyle = '#b51f1f'; ctx.fillRect(-60, 6, 118, 7);
+  // cab
+  ctx.fillStyle = '#d62828'; ctx.beginPath(); ctx.moveTo(0, -13); ctx.lineTo(4, -44); ctx.lineTo(34, -44); ctx.lineTo(42, -14); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#bde0fe'; ctx.beginPath(); ctx.moveTo(10, -18); ctx.lineTo(13, -39); ctx.lineTo(31, -39); ctx.lineTo(37, -18); ctx.closePath(); ctx.fill();
+  // farmer
+  ctx.fillStyle = '#f1c27d'; ctx.beginPath(); ctx.arc(22, -27, 6, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#e9c46a'; ctx.fillRect(14, -36, 16, 4); ctx.fillRect(17, -40, 10, 5);
+  // hood + lights
+  ctx.fillStyle = '#ffd166'; ctx.fillRect(52, -8, 6, 6);
+  // wooden bed walls
+  const wall = G.S.wall;
+  ctx.fillStyle = '#a0632b'; ctx.fillRect(BED.x0 - 4, BED.floor - wall, 5, wall); ctx.fillRect(BED.x1 - 1, -40, 5, 27);
+  ctx.strokeStyle = '#7b4a1e'; ctx.lineWidth = 1.5; for (let y = BED.floor - wall + 5; y < BED.floor; y += 6){ ctx.beginPath(); ctx.moveTo(BED.x0 - 4, y); ctx.lineTo(BED.x0 + 1, y); ctx.stroke(); }
+  ctx.restore();
+}
+
+const horizon = () => VH > VW ? .5 : .58;          // portrait: centre the truck so less of the screen is dirt
+function draw(){
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  // sky
+  const sky = ctx.createLinearGradient(0, 0, 0, VH); sky.addColorStop(0, '#ff9e5e'); sky.addColorStop(.55, '#ffcf8b'); sky.addColorStop(1, '#ffe8c2');
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, VW, VH);
+  ctx.fillStyle = 'rgba(255,240,200,.85)'; ctx.beginPath(); ctx.arc(VW * .78, VH * .24, Math.min(VW, VH) * .09, 0, TAU); ctx.fill();
+  const camX = G ? G.cam.x : performance.now() * .1, camY = G ? G.cam.y : 0;
+  // parallax hills
+  for (const [k, col, amp, base] of [[.15, '#f29e6b', 60, .62], [.35, '#d98b5f', 45, .74]]){
+    ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(0, VH);
+    for (let x = 0; x <= VW + 20; x += 20){ const wx = (x + camX * k) / 140; ctx.lineTo(x, VH * base + Math.sin(wx) * amp + Math.sin(wx * 2.3) * amp * .4); }
+    ctx.lineTo(VW, VH); ctx.fill();
+  }
+  if (!G) return;
+  const sx = (Math.random() - .5) * G.shake, sy = (Math.random() - .5) * G.shake;
+  ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * (VW / 2 + sx) - camX * dpr * scale, dpr * (VH * horizon() + sy) - camY * dpr * scale);
+  const L = camX - VW / 2 / scale - 40, R = camX + VW / 2 / scale + 40, B = camY + VH / scale;
+
+  // ground
+  ctx.beginPath(); ctx.moveTo(L, B);
+  for (let x = Math.floor(L / 20) * 20; x <= R; x += 20) ctx.lineTo(x, groundY(x));
+  ctx.lineTo(R, B); ctx.closePath();
+  ctx.fillStyle = '#8b5a2b'; ctx.fill();
+  ctx.beginPath(); for (let x = Math.floor(L / 20) * 20; x <= R; x += 20) ctx[x === Math.floor(L / 20) * 20 ? 'moveTo' : 'lineTo'](x, groundY(x) + 6);
+  ctx.strokeStyle = '#5fa83a'; ctx.lineWidth = 14; ctx.stroke();
+  ctx.strokeStyle = '#7cc251'; ctx.lineWidth = 5; ctx.stroke();
+  // distance posts every 50 m
+  for (let m = Math.ceil(L / PX_PER_M / 50) * 50; m * PX_PER_M < R; m += 50){ const x = m * PX_PER_M, y = groundY(x); ctx.fillStyle = '#fff8'; ctx.fillRect(x - 2, y - 40, 4, 40); ctx.fillStyle = '#5c3a1b'; ctx.font = '800 14px ui-rounded,system-ui,sans-serif'; ctx.textAlign = 'center'; ctx.fillText(m + ' m', x, y - 46); }
+  // farm stands
+  for (const s of T.stations){
+    if (s.x < L - 200 || s.x > R + 200) continue;
+    const y = groundY(s.x);
+    ctx.fillStyle = '#b5523b'; ctx.fillRect(s.x - 10, y - 110, 90, 110);
+    ctx.fillStyle = '#7a2f20'; ctx.beginPath(); ctx.moveTo(s.x - 20, y - 110); ctx.lineTo(s.x + 35, y - 150); ctx.lineTo(s.x + 90, y - 110); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.fillRect(s.x + 22, y - 60, 26, 60);
+    ctx.fillStyle = '#5c3a1b'; ctx.font = '900 15px ui-rounded,system-ui,sans-serif'; ctx.textAlign = 'center'; ctx.fillText(s.done ? '✓' : 'FARM STAND', s.x + 35, y - 122);
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(s.x - 4, y); ctx.lineTo(s.x - 4, y - 200); ctx.stroke();
+    ctx.fillStyle = s.done ? '#2a9d55' : '#d62828'; ctx.beginPath(); ctx.moveTo(s.x - 4, y - 200); ctx.lineTo(s.x + 36, y - 188); ctx.lineTo(s.x - 4, y - 176); ctx.fill();
+  }
+  // fuel cans and coins
+  for (const f of T.cans){ if (f.got || f.x < L || f.x > R) continue; const y = groundY(f.x) - 22; ctx.fillStyle = '#e63946'; rr(f.x - 12, y - 14, 24, 30, 5); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = '900 13px ui-rounded,system-ui,sans-serif'; ctx.textAlign = 'center'; ctx.fillText('⛽', f.x, y + 4); }
+  for (const k of T.coins){ if (k.got || k.x < L || k.x > R) continue; const y = groundY(k.x) - k.lift; ctx.fillStyle = '#f4c430'; ctx.beginPath(); ctx.arc(k.x, y, 8, 0, TAU); ctx.fill(); ctx.strokeStyle = '#d99a00'; ctx.lineWidth = 2; ctx.stroke(); }
+
+  for (const e of G.hens) if (!e.aboard) drawHen(e, G.t);
+  drawTruck();
+  for (const e of G.hens) if (e.aboard) drawHen(e, G.t);
+  for (const p of G.parts){ ctx.globalAlpha = Math.min(1, p.life * 2); ctx.fillStyle = p.c; ctx.fillRect(p.x, p.y, p.s, p.s); }
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'center'; ctx.font = '900 18px ui-rounded,system-ui,sans-serif';
+  for (const t of G.texts){ ctx.globalAlpha = Math.min(1, t.life * 2); ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillText(t.v, t.x + 2, t.y + 2); ctx.fillStyle = t.c; ctx.fillText(t.v, t.x, t.y); }
+  ctx.globalAlpha = 1;
+
+  // HUD
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const m = meters(G.maxX - 200);
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillStyle = '#3a2410'; ctx.font = '900 26px ui-rounded,system-ui,sans-serif';
+  ctx.fillText(m + ' m', 14, 12);
+  ctx.font = '800 15px ui-rounded,system-ui,sans-serif';
+  const aboard = G.hens.filter(e => e.aboard).length;
+  ctx.fillText(`🐔 ${aboard}/${G.S.cap}   🪙 ${G.coins}`, 14, 44);
+  const next = T.stations.find(s => !s.done);
+  if (next) ctx.fillText(`🏠 farm stand in ${meters(next.x - G.c.x)} m`, 14, 66);
+  // fuel bar
+  const fw = Math.min(180, VW * .36), fx = VW - fw - 62, fy = 22;
+  ctx.fillStyle = 'rgba(0,0,0,.2)'; rr(fx, fy, fw, 14, 7); ctx.fill();
+  const fr = G.fuel / G.S.tank; ctx.fillStyle = fr < .2 ? '#e63946' : fr < .45 ? '#f4a300' : '#2a9d55'; rr(fx, fy, Math.max(0, fw * fr), 14, 7); ctx.fill();
+  ctx.fillStyle = '#3a2410'; ctx.textAlign = 'right'; ctx.font = '800 13px ui-rounded,system-ui,sans-serif'; ctx.fillText('⛽', fx - 6, fy - 1);
+  if (G.banner){
+    const b = G.banner; ctx.globalAlpha = Math.min(1, b.life * 1.5); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `900 ${Math.round(Math.min(40, VW / 12))}px ui-rounded,system-ui,sans-serif`;
+    ctx.fillStyle = 'rgba(60,30,10,.4)'; ctx.fillText(b.text, VW / 2 + 3, VH * .26 + 3); ctx.fillStyle = '#fff'; ctx.fillText(b.text, VW / 2, VH * .26);
+    ctx.globalAlpha = 1;
+  }
+  // pedals
+  if (screen === 'play' && matchMedia('(pointer: coarse)').matches){
+    ctx.globalAlpha = .55; ctx.font = '900 15px ui-rounded,system-ui,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = input.brake ? '#fff' : 'rgba(255,255,255,.6)'; rr(16, VH - 96, 92, 80, 18); ctx.fill(); ctx.fillStyle = '#3a2410'; ctx.fillText('BRAKE', 62, VH - 56);
+    ctx.fillStyle = input.gas ? '#fff' : 'rgba(255,255,255,.6)'; rr(VW - 108, VH - 96, 92, 80, 18); ctx.fill(); ctx.fillStyle = '#3a2410'; ctx.fillText('GAS', VW - 62, VH - 56);
+    ctx.globalAlpha = 1;
+  }
+}
+
+/* ================= Screens ================= */
+function show(id){
+  for (const s of ['menu', 'over', 'garage', 'paused']) $(s).classList.toggle('on', s === id);
+  $('pauseBtn').style.display = id === null ? 'block' : 'none';
+}
+function refreshMenu(){
+  $('mBest').textContent = save.best + ' m'; $('mCoins').textContent = save.coins; $('mHens').textContent = save.bestHens;
+  const d = save.daily[dayKey()];
+  $('dailyBtn').innerHTML = `Daily Route #${dailyNumber()}<small>${d ? 'Your best today: ' + d.m + ' m, ' + d.hens + ' 🐔' : 'Same hills for everyone today'}</small>`;
+  $('muteBtn').textContent = 'Sound: ' + (save.muted ? 'off' : 'on');
+}
+function startRun(daily = false){ Sound.init(); newRun(daily); input.gas = input.brake = 0; screen = 'play'; paused = false; show(null); last = performance.now(); Portal.gameplayStart(); }
+function showOver(){
+  screen = 'over'; G.over = true; Sound.engine(false);
+  const m = meters(G.maxX - 200), add = G.coins - (G.paid || 0); G.paid = G.coins; save.coins += add;
+  const best = m > save.best; if (best) save.best = m; save.bestHens = Math.max(save.bestHens, G.delivered); save.runs++;
+  if (G.daily){ const k = dayKey(), p = save.daily[k]; if (!p || m > p.m) save.daily[k] = { m, hens: G.delivered, flips: G.flips }; }
+  persist();
+  $('oTitle').textContent = G.reason || 'Crashed!';
+  $('oDist').textContent = m + ' m'; $('oBest').textContent = best ? 'New best!' : 'Best ' + save.best + ' m';
+  $('oHens').textContent = G.delivered; $('oFlips').textContent = G.flips; $('oCoins').textContent = G.coins;
+  $('reviveBtn').style.display = G.revived || G.reason === 'Out of fuel' ? 'none' : 'block';
+  $('doubleBtn').style.display = G.doubled || G.coins < 5 ? 'none' : 'block';
+  $('shareBtn').style.display = G.daily ? 'block' : 'none';
+  show('over');
+}
+async function revive(){
+  if (!G || G.revived || !G.crashed) return;
+  if (!(await Portal.rewarded())) return;
+  G.revived = true; G.crashed = false; G.over = false; G.reason = '';
+  const c = G.c, x = c.x, y = groundY(x) - 45;
+  Object.assign(c, { x, y, a: Math.atan2(groundY(x + 20) - groundY(x - 20), 40), vx: 0, vy: 0, w: 0 });
+  G.wheels.forEach((w, i) => { const p = toWorld(MOUNTS[i][0], MOUNTS[i][1] + REST); Object.assign(w, { x: p.x, y: p.y, vx: 0, vy: 0 }); });
+  G.hens = []; loadHens();          // the crate is refilled: you keep going with a full load
+  G.fuel = Math.max(G.fuel, G.S.tank * .6); G.upsideT = 0; G.stopT = 0;
+  G.banner = { text: 'BACK ON THE ROAD!', life: 1.5 };
+  screen = 'play'; show(null); last = performance.now(); Portal.gameplayStart();
+}
+async function doubleCoins(){
+  if (!G || G.doubled) return;
+  if (!(await Portal.rewarded())) return;
+  G.doubled = true; save.coins += G.coins; persist(); $('oCoins').textContent = G.coins * 2; $('doubleBtn').style.display = 'none'; toast('Coins doubled!');
+}
+async function share(){
+  const r = save.daily[dayKey()]; if (!r) return;
+  const url = /^https?:/.test(location.href) ? '\n' + location.origin + location.pathname : '';
+  const text = `Hen Haul · Daily Route #${dailyNumber()}\n🚚 ${r.m} m · 🐔 ${r.hens} delivered${r.flips ? ' · 🔄 ' + r.flips : ''}${url}`;
+  try { if (navigator.share){ await navigator.share({ text }); return; } } catch(e){ if (e && e.name === 'AbortError') return; }
+  try { await navigator.clipboard.writeText(text); toast('Copied. Paste it anywhere'); } catch(e){ prompt('Copy your result:', text); }
+}
+let garageFrom = 'menu';
+function renderGarage(){
+  $('gCoins').textContent = save.coins;
+  $('shop').innerHTML = UPGRADES.map(u => {
+    const L = up(u.id), maxed = L >= u.max, c = upCost(u);
+    return `<div class="item"><span class="ic">${u.ic}</span><span class="t"><b>${u.name}</b><small>${u.desc}</small><span class="pips">${Array.from({ length: u.max }, (_, k) => `<i class="${k < L ? 'on' : ''}"></i>`).join('')}</span></span><button data-u="${u.id}" ${maxed || save.coins < c ? 'disabled' : ''}>${maxed ? 'Max' : c + ' 🪙'}</button></div>`;
+  }).join('');
+}
+function toMenu(){ G = null; screen = 'menu'; paused = false; Sound.engine(false); refreshMenu(); show('menu'); Portal.gameplayStop(); }
+function pause(){ if (screen !== 'play' || !G || G.crashed) return; paused = true; screen = 'paused'; show('paused'); Sound.engine(false); Portal.gameplayStop(); }
+function resume(){ paused = false; screen = 'play'; show(null); last = performance.now(); Portal.gameplayStart(); }
+
+/* ================= Input ================= */
+const keys = {};
+function syncKeys(){ input.gas = keys.ArrowRight || keys.KeyD || keys.ArrowUp || keys.KeyW ? 1 : 0; input.brake = keys.ArrowLeft || keys.KeyA || keys.ArrowDown || keys.KeyS ? 1 : 0; }
+addEventListener('keydown', e => { keys[e.code] = true; if (!touches.size) syncKeys(); if (e.code === 'Escape' || e.code === 'KeyP') screen === 'paused' ? resume() : pause(); if (e.code.startsWith('Arrow') || e.code === 'Space') e.preventDefault(); });
+addEventListener('keyup', e => { keys[e.code] = false; if (!touches.size) syncKeys(); });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; touches.clear(); input.gas = input.brake = 0; });
+const touches = new Map();
+function syncTouches(){ let g = 0, b = 0; for (const x of touches.values()){ if (x > VW / 2) g = 1; else b = 1; } input.gas = g; input.brake = b; }
+cvs.addEventListener('pointerdown', e => { if (screen !== 'play') return; Sound.init(); touches.set(e.pointerId, e.clientX); try { cvs.setPointerCapture(e.pointerId); } catch(err){} syncTouches(); });
+cvs.addEventListener('pointermove', e => { if (touches.has(e.pointerId)){ touches.set(e.pointerId, e.clientX); syncTouches(); } });
+const lift = e => { touches.delete(e.pointerId); syncTouches(); };
+cvs.addEventListener('pointerup', lift); cvs.addEventListener('pointercancel', lift);
+document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
+
+$('playBtn').onclick = () => startRun(false);
+$('dailyBtn').onclick = () => startRun(true);
+$('garageBtn').onclick = () => { garageFrom = 'menu'; renderGarage(); show('garage'); };
+$('oGarageBtn').onclick = () => { garageFrom = 'over'; renderGarage(); show('garage'); };
+$('gBackBtn').onclick = () => { if (garageFrom === 'over' && G) show('over'); else toMenu(); };
+$('shop').onclick = e => { const b = e.target.closest('button[data-u]'); if (!b) return; const u = UPGRADES.find(x => x.id === b.dataset.u), c = upCost(u); if (save.coins < c || up(u.id) >= u.max) return; save.coins -= c; save.up[u.id] = up(u.id) + 1; persist(); Sound.init(); Sound.deliver(2); renderGarage(); };
+$('againBtn').onclick = async () => { runsSinceAd++; if (runsSinceAd >= 3){ runsSinceAd = 0; await Portal.interstitial(); } startRun(G && G.daily); };
+$('reviveBtn').onclick = revive;
+$('doubleBtn').onclick = doubleCoins;
+$('shareBtn').onclick = share;
+$('oMenuBtn').onclick = toMenu;
+$('pauseBtn').onclick = pause;
+$('resumeBtn').onclick = resume;
+$('quitBtn').onclick = () => { if (G){ G.reason = 'You parked the truck'; G.crashed = true; showOver(); } };
+$('muteBtn').onclick = () => { save.muted = !save.muted; persist(); Sound.setMuted(save.muted); refreshMenu(); };
+
+/* ================= Loop ================= */
+let last = performance.now(), loggedErr = false;
+function frame(t){
+  requestAnimationFrame(frame);                 // schedule first, so one bad frame can never freeze the game
+  const dt = Math.min((t - last) / 1000, 1 / 30); last = t;
+  try {
+    if (G && screen === 'play' && !paused && !G.crashed) update(dt);
+    if (G) moveCamera(dt);
+    else if (G && G.crashed && !G.over){ for (let k = 0; k < 4; k++) stepHens(dt / 4); for (const p of G.parts){ p.vy += GRAV * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt; } }
+    draw();
+  } catch(err){
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1;
+    if (!loggedErr){ loggedErr = true; console.error('Hen Haul frame error', err); }
+  }
+}
+refreshMenu(); requestAnimationFrame(frame);
+
+if (/[?&]debug\b/.test(location.search)) window.__hh = {
+  get G(){ return G; }, get T(){ return T; }, input, newRun, update, draw, moveCamera, get scale(){ return scale; }, groundY, groundNormal, toLocal, save, stats, show,
+  get screen(){ return screen; }, set screen(v){ screen = v; }, setView(w, h){ VW = w; VH = h; scale = clamp(Math.min(VW / 620, VH / 470), .55, 1.3); },
+};
+})();
+</script>
+</body>
+</html>
