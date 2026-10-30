@@ -302,6 +302,10 @@ const UPGRADES = [
   { id: 'tank',   name: 'Fuel tank',   ic: '⛽', desc: '+25% fuel',                           base: 30, grow: 1.6, max: 6 },
 ];
 const upCost = u => Math.round(u.base * Math.pow(u.grow, up(u.id)));
+// one-time tips already shown; anyone who has finished a run before counts as having seen them
+save.tips = save.tips || (save.runs > 0 ? { tilt: 1, stand: 1 } : {});
+// a short buzz on phones; browsers only allow it after the player has touched the page
+function buzz(ms){ try { if (navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) navigator.vibrate(ms); } catch(e){} }
 
 /* ================= Sound ================= */
 const Sound = (() => {
@@ -329,7 +333,10 @@ const Sound = (() => {
     init, setMuted(m){ if (master) master.gain.value = m ? 0 : .5; },
     engine(on, speed = 0, gas = 0){ if (!eng) return; const t = A.currentTime; engOn = on && !save.muted; engGain.gain.setTargetAtTime(engOn ? .05 + gas * .07 : 0, t, .08); eng.frequency.setTargetAtTime(42 + speed * .09 + gas * 26, t, .1); },
     cluck(){ if (!ok()) return; const b = 700 + Math.random() * 300; note(b, 'square', .06, .07, 0, 1.4); note(b * 1.25, 'square', .05, .09, .08, .7); },
-    coin(){ if (ok()) { note(1500, 'square', .03, .05); note(2000, 'square', .03, .08, .05); } },
+    // a coin streak climbs the scale, so a row of coins plays a little run
+    coin(streak = 0){ if (!ok()) return; const k = Math.pow(2, Math.min(streak, 12) / 12); note(1180 * k, 'square', .03, .05); note(1580 * k, 'square', .03, .08, .05); },
+    thud(v){ if (!ok()) return; note(clamp(140 - v * .05, 60, 140), 'sine', Math.min(.25, v * .0005), .18, 0, .5); },
+    pop(){ if (ok()) note(880, 'triangle', .07, .09, 0, 1.6); },
     deliver(n){ if (!ok()) return; [0, 4, 7, 12, 16].slice(0, 2 + Math.min(3, n)).forEach((s, k) => note(523 * Math.pow(2, s / 12), 'triangle', .1, .25, k * .07)); },
     flip(){ if (ok()) [0, 7, 12].forEach((s, k) => note(660 * Math.pow(2, s / 12), 'sine', .08, .2, k * .06)); },
     fuel(){ if (ok()) note(300, 'sine', .08, .25, 0, 2); },
@@ -410,7 +417,10 @@ function newRun(daily = false){
   const y0 = groundY(200) - 40;
   G = { daily, S, c: { x: 200, y: y0, a: 0, vx: 0, vy: 0, w: 0 }, wheels: MOUNTS.map(([mx, my]) => ({ x: 200 + mx, y: y0 + my + REST, vx: 0, vy: 0, rot: 0, ground: false })),
         hens: [], fuel: S.tank, coins: 0, delivered: 0, flips: 0, airRot: 0, airT: 0, crashed: false, over: false, revived: false, doubled: false,
-        t: 0, parts: [], texts: [], cam: { x: 200, y: y0 }, shake: 0, upsideT: 0, stopT: 0, maxX: 200, reason: '', lostAt: [], banner: null };
+        t: 0, parts: [], texts: [], cam: { x: 200, y: y0 }, shake: 0, upsideT: 0, stopT: 0, maxX: 200, reason: '', lostAt: [], banner: null,
+        // waiting: parked at the start until the first gas/brake (nothing burns or counts before that)
+        waiting: true, hitStop: 0, timeScale: 1, slowTarget: 1, airVy: 0, tip: null,
+        puffs: [], feathers: [], hoppers: [], flyCoins: [], coinStreak: 0, coinT: 0, coinBump: 0 };
   loadHens();
 }
 const toWorld = (lx, ly) => { const c = G.c, cs = Math.cos(c.a), sn = Math.sin(c.a); return { x: c.x + lx * cs - ly * sn, y: c.y + lx * sn + ly * cs }; };
@@ -527,6 +537,7 @@ function stepHens(h){
 /* ================= Game update ================= */
 function update(dt){
   if (!G || G.over) return;
+  if (G.waiting && (input.gas || input.brake)){ G.waiting = false; Sound.init(); }
   G.t += dt;
   const S = G.S, c = G.c;
   const sub = 8, h = dt / sub;
@@ -534,13 +545,17 @@ function update(dt){
   if (![c.x, c.y, c.vx, c.vy, c.a, c.w].every(Number.isFinite)) { crash('The truck fell apart'); return; }
 
   // fuel
-  G.fuel = Math.max(0, G.fuel - (input.gas ? 4.6 : .5) * dt);
+  if (!G.waiting) G.fuel = Math.max(0, G.fuel - (input.gas ? 4.6 : .5) * dt);
   // which hens are still in the bed
   for (const e of G.hens){
     if (e.loose) { e.aboard = false; continue; }
     const L = toLocal(e.x, e.y);
     const inBed = L.x > BED.x0 - 4 && L.x < BED.x1 + 4 && L.y < BED.floor + 2 && L.y > BED.floor - G.S.wall - 70;
-    if (e.aboard && !inBed && (L.x < BED.x0 - 22 || L.y < BED.floor - G.S.wall - 70 || L.x > 70)){ e.aboard = false; Sound.cluck(); G.texts.push({ x: e.x, y: e.y - 20, v: 'BAWK!', life: 1, c: '#fff' }); }
+    if (e.aboard && !inBed && (L.x < BED.x0 - 22 || L.y < BED.floor - G.S.wall - 70 || L.x > 70)){
+      e.aboard = false; Sound.cluck(); G.texts.push({ x: e.x, y: e.y - 20, v: 'BAWK!', life: 1, max: 1, c: '#fff', pop: true });
+      // a puff of feathers where it left the crate
+      for (let k = 0; k < 9; k++){ const a = Math.random() * TAU, s = 40 + Math.random() * 110; G.feathers.push({ x: e.x, y: e.y, vx: Math.cos(a) * s + c.vx * .4, vy: Math.sin(a) * s - 60 + c.vy * .3, rot: Math.random() * TAU, vr: (Math.random() - .5) * 10, life: 1 + Math.random() * .6 }); }
+    }
     else if (!e.aboard && !e.loose && inBed && L.y > BED.floor - G.S.wall) e.aboard = true;   // caught it!
     e.flap = e.aboard && Math.abs(e.y - e.py) < .4 ? 0 : (e.flap + dt * 20);
   }
@@ -549,26 +564,41 @@ function update(dt){
 
   // flips: count full turns while airborne, pay out on a clean landing
   const air = !G.wheels.some(w => w.ground);
-  if (air){ G.airT += dt; G.airRot += c.w * dt; }
-  else {
+  if (air){
+    G.airT += dt; G.airRot += c.w * dt; G.airVy = c.vy;
+    if (G.airT > .35 && !save.tips.tilt && !G.waiting){ save.tips.tilt = 1; persist(); G.tip = { text: 'In the air, gas and brake tilt the truck: land on your wheels!', life: 3.6 }; }
+  } else {
+    if (G.airT > .15 && !G.crashed) landed(Math.max(0, G.airVy));
     if (G.airT > .3 && Math.abs(G.airRot) > TAU * .85 && !G.crashed){
       const n = Math.round(Math.abs(G.airRot) / TAU); G.flips += n; G.coins += 15 * n;
-      G.banner = { text: n > 1 ? `${n}× FLIP!` : (G.airRot < 0 ? 'BACKFLIP!' : 'FRONTFLIP!'), life: 1.4 }; Sound.flip();
-    } else if (G.airT > 1.1 && !G.crashed){ G.banner = { text: 'BIG AIR', life: 1 }; G.coins += 3; }
+      G.banner = { text: n > 1 ? `${n}× FLIP!` : (G.airRot < 0 ? 'BACKFLIP!' : 'FRONTFLIP!'), life: 1.4, max: 1.4 }; Sound.flip();
+      G.hitStop = .09; G.shake = Math.max(G.shake, 6); buzz([15, 40, 25]);
+      sparkle(c.x, c.y - 20, 18, '#ffd84a');
+    } else if (G.airT > 1.1 && !G.crashed){ G.banner = { text: 'BIG AIR', life: 1, max: 1 }; G.coins += 3; }
     G.airT = 0; G.airRot = 0;
   }
+  // a moment of slow motion near the top of a big jump
+  G.slowTarget = air && G.airT > .7 && G.airT < 1.35 && !G.crashed ? .6 : 1;
 
   // pickups
-  for (const k of T.coins){ if (k.got || Math.abs(k.x - c.x) > 80) continue; const ky = groundY(k.x) - k.lift; if (Math.hypot(k.x - c.x, ky - c.y) < 60){ k.got = true; G.coins++; Sound.coin(); } }
+  G.coinT += dt; if (G.coinT > 1.2) G.coinStreak = 0;
+  for (const k of T.coins){ if (k.got || Math.abs(k.x - c.x) > 80) continue; const ky = groundY(k.x) - k.lift; if (Math.hypot(k.x - c.x, ky - c.y) < 60){ k.got = true; G.coins++; Sound.coin(G.coinStreak++); G.coinT = 0; G.coinBump = 1; sparkle(k.x, ky, 6, '#ffe680'); } }
   for (const f of T.cans){ if (f.got || Math.abs(f.x - c.x) > 70) continue; if (Math.abs(groundY(f.x) - 20 - c.y) < 80){ f.got = true; G.fuel = S.tank; Sound.fuel(); G.texts.push({ x: f.x, y: groundY(f.x) - 60, v: 'FUEL!', life: 1.2, c: '#2a9d55' }); } }
   for (const s of T.stations){
+    if (!s.done && !G.waiting && !save.tips.stand && s.x - c.x < 45 * PX_PER_M && s.x > c.x){ save.tips.stand = 1; persist(); G.tip = { text: 'Reach the farm stand to get paid for every chicken aboard', life: 3.6 }; }
     if (s.done || c.x < s.x) continue;
     s.done = true;
-    const n = G.hens.filter(e => e.aboard).length;
+    const aboardNow = G.hens.filter(e => e.aboard), n = aboardNow.length;
     const pay = n * (10 + s.idx * 3);
     G.delivered += n; G.coins += pay; G.fuel = S.tank;
-    G.banner = { text: n ? `${n} 🐔 DELIVERED  +${pay}` : 'NO CHICKENS LEFT!', life: 2 };
+    G.banner = { text: n ? `${n} 🐔 DELIVERED  +${pay}` : 'NO CHICKENS LEFT!', life: 2, max: 2 };
     Sound.deliver(n);
+    // the chickens hop off onto the counter, and the pay flies up to your coin counter
+    const gy = groundY(s.x);
+    aboardNow.forEach((e, k) => G.hoppers.push({ x0: e.x, y0: e.y, x1: s.x + 10 + k * 14, y1: gy - 52 - HEN_R, t: -k * .07, dur: .55, id: e.id }));
+    const nc = Math.min(14, Math.ceil(pay / 6));
+    for (let k = 0; k < nc; k++){ const p = toScreen(c.x, c.y - 30); G.flyCoins.push({ x: p.x, y: p.y, vx: (Math.random() - .5) * 260, vy: -160 - Math.random() * 180, t: -k * .05 }); }
+    if (n) buzz(30);
     G.hens = G.hens.filter(e => !e.aboard);
     loadHens();
   }
@@ -582,11 +612,13 @@ function update(dt){
   G.stopT = G.fuel <= 0 && speed < 15 ? G.stopT + dt : 0;
   if (G.stopT > 1.5 && !G.crashed) crash('Out of fuel');
 
-  for (const p of G.parts){ p.vy += GRAV * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt; }
+  for (const p of G.parts){ p.vy += (p.spark ? 220 : GRAV) * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt; }
   G.parts = G.parts.filter(p => p.life > 0);
   for (const t of G.texts){ t.y -= 40 * dt; t.life -= dt; }
   G.texts = G.texts.filter(t => t.life > 0);
+  stepJuice(dt);
   if (G.banner){ G.banner.life -= dt; if (G.banner.life <= 0) G.banner = null; }
+  if (G.tip){ G.tip.life -= dt; if (G.tip.life <= 0) G.tip = null; }
   G.shake *= Math.pow(.01, dt);
   Sound.engine(true, speed, input.gas && G.fuel > 0 ? 1 : 0);
 }
@@ -601,11 +633,46 @@ function moveCamera(dt){
 }
 function crash(reason){
   if (G.crashed) return;
-  G.crashed = true; G.reason = reason; G.shake = 16; Sound.crash(); Sound.engine(false);
+  G.crashed = true; G.reason = reason; G.shake = 16; G.hitStop = .12; G.slowTarget = 1; Sound.crash(); Sound.engine(false); buzz(120);
   const c = G.c; for (let k = 0; k < 30; k++){ const a = Math.random() * TAU, s = 80 + Math.random() * 260; G.parts.push({ x: c.x, y: c.y - 20, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 200, life: .8 + Math.random() * .6, c: Math.random() < .5 ? '#fff' : '#d62828', s: 3 + Math.random() * 4 }); }
   for (const e of G.hens) if (e.aboard){ e.aboard = false; e.px = e.x - (Math.random() - .5) * 8; e.py = e.y + 6; }
   Portal.gameplayStop();
   setTimeout(() => { if (G && G.crashed && !G.over) showOver(); }, 1100);
+}
+
+/* ================= Game feel: dust, feathers, sparkles, flying coins ================= */
+// world position to screen position (for effects that fly up to the HUD)
+function toScreen(x, y){ return { x: VW / 2 + (x - G.cam.x) * scale, y: VH * horizon() + (y - G.cam.y) * scale }; }
+// a landing: thump, shake and dust, all scaled by how hard the truck came down
+function landed(v){
+  if (v < 120) return;
+  const k = clamp((v - 120) / 700, 0, 1);
+  G.shake = Math.max(G.shake, 2 + k * 9); Sound.thud(v);
+  if (k > .35) buzz(Math.round(15 + k * 30));
+  for (const w of G.wheels){
+    const n = 4 + Math.round(k * 10), gy = groundY(w.x);
+    for (let i = 0; i < n; i++){ const dir = Math.random() < .5 ? -1 : 1; G.puffs.push({ x: w.x + (Math.random() - .5) * 10, y: gy - 3, vx: dir * (40 + Math.random() * 120 * (.5 + k)), vy: -20 - Math.random() * 60 * (.5 + k), r: 4 + Math.random() * 5 + k * 6, life: .5 + Math.random() * .4, max: .9 }); }
+  }
+}
+function sparkle(x, y, n, c){ for (let i = 0; i < n; i++){ const a = Math.random() * TAU, s = 60 + Math.random() * 160; G.parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 80, life: .35 + Math.random() * .35, c: Math.random() < .5 ? c : '#fff', s: 2.5 + Math.random() * 2.5, spark: true }); } }
+function stepJuice(dt){
+  for (const p of G.puffs){ p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= Math.pow(.15, dt); p.vy = p.vy * Math.pow(.3, dt) - 10 * dt; p.r += 14 * dt; p.life -= dt; }
+  G.puffs = G.puffs.filter(p => p.life > 0);
+  for (const f of G.feathers){ f.vy += 160 * dt; f.vx *= Math.pow(.25, dt); f.vy *= Math.pow(.35, dt); f.x += f.vx * dt + Math.sin(f.life * 6) * 12 * dt; f.y += f.vy * dt; f.rot += f.vr * dt; f.life -= dt; }
+  G.feathers = G.feathers.filter(f => f.life > 0);
+  for (const h of G.hoppers) h.t += dt;
+  G.hoppers = G.hoppers.filter(h => h.t < h.dur + 1.6);
+}
+// flying coins live in screen space and keep moving even while the round is over
+function stepFlyCoins(dt){
+  const tx = G.coinHud ? G.coinHud.x : 90, ty = G.coinHud ? G.coinHud.y : 60;
+  for (const f of G.flyCoins){
+    f.t += dt; if (f.t < 0) continue;
+    if (f.t < .35){ f.x += f.vx * dt; f.y += f.vy * dt; f.vy += 600 * dt; }
+    else { const k = Math.min(1, dt * 9); f.x += (tx - f.x) * k; f.y += (ty - f.y) * k; if (Math.hypot(tx - f.x, ty - f.y) < 10){ f.done = true; G.coinBump = 1; Sound.coin(3); } }
+  }
+  G.flyCoins = G.flyCoins.filter(f => !f.done && f.t < 2.5);
+  G.coinBump = Math.max(0, G.coinBump - dt * 4);
 }
 
 /* ================= Drawing ================= */
@@ -882,11 +949,30 @@ function draw(){
   for (const k of T.coins){ if (k.got || k.x < L || k.x > R) continue; drawCoin(k.x, groundY(k.x) - k.lift, 8.5, G.t); }
 
   for (const e of G.hens) if (!e.aboard) drawHen(e, G.t);
+  // dust kicked up by landings
+  for (const p of G.puffs){ ctx.globalAlpha = clamp(p.life / p.max, 0, 1) * .55; ctx.fillStyle = '#d9b48a'; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, TAU); ctx.fill(); }
+  ctx.globalAlpha = 1;
   drawTruck();
   for (const e of G.hens) if (e.aboard) drawHen(e, G.t);
-  for (const p of G.parts){ ctx.globalAlpha = Math.min(1, p.life * 2); ctx.fillStyle = p.c; ctx.fillRect(p.x, p.y, p.s, p.s); }
+  // delivered chickens hop from the crate onto the counter, then stay a moment
+  for (const h of G.hoppers){
+    if (h.t < 0) continue;
+    const k = Math.min(1, h.t / h.dur), x = h.x0 + (h.x1 - h.x0) * k, y = h.y0 + (h.y1 - h.y0) * k - Math.sin(k * Math.PI) * 46;
+    ctx.globalAlpha = clamp(h.dur + 1.6 - h.t, 0, 1); drawHen({ x, y, aboard: k >= 1, loose: false, flap: k < 1 ? h.t * 30 : 0, id: h.id }, G.t); ctx.globalAlpha = 1;
+  }
+  for (const f of G.feathers){ ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot); ctx.globalAlpha = clamp(f.life, 0, 1); ctx.fillStyle = '#fffaf0'; ctx.beginPath(); ctx.ellipse(0, 0, 4.5, 1.8, 0, 0, TAU); ctx.fill(); ctx.strokeStyle = 'rgba(160,130,100,.5)'; ctx.lineWidth = .6; ctx.beginPath(); ctx.moveTo(-4.5, 0); ctx.lineTo(4.5, 0); ctx.stroke(); ctx.restore(); }
   ctx.globalAlpha = 1;
-  for (const t of G.texts){ ctx.globalAlpha = Math.min(1, t.life * 2); outlined(t.v, t.x, t.y, 18, t.c, 'center'); }
+  for (const p of G.parts){
+    ctx.globalAlpha = Math.min(1, p.life * 2); ctx.fillStyle = p.c;
+    if (p.spark){ const s = p.s; ctx.beginPath(); ctx.moveTo(p.x, p.y - s * 1.6); ctx.lineTo(p.x + s * .5, p.y); ctx.lineTo(p.x, p.y + s * 1.6); ctx.lineTo(p.x - s * .5, p.y); ctx.closePath(); ctx.fill(); ctx.fillRect(p.x - s * 1.3, p.y - .6, s * 2.6, 1.2); }
+    else ctx.fillRect(p.x, p.y, p.s, p.s);
+  }
+  ctx.globalAlpha = 1;
+  for (const t of G.texts){
+    ctx.globalAlpha = Math.min(1, t.life * 2);
+    const age = (t.max || 1) - t.life, sz = t.pop ? 18 * (1 + Math.max(0, .5 - age * 3.5)) : 18;   // pop texts start big and settle
+    outlined(t.v, t.x, t.y, sz, t.c, 'center');
+  }
   ctx.globalAlpha = 1;
 
   // HUD
@@ -897,7 +983,9 @@ function draw(){
   const aboard = G.hens.filter(e => e.aboard).length;
   henIcon(24, top + 52, 1.25); outlined(`${aboard}/${G.S.cap}`, 38, top + 52, 17, '#fff');
   const cx2 = 38 + ctx.measureText(`${aboard}/${G.S.cap}`).width + 22;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); drawCoin(cx2, top + 52, 8, null); outlined(String(G.coins), cx2 + 13, top + 52, 17, '#fff');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); G.coinHud = { x: cx2, y: top + 52 };
+  const cb = 1 + G.coinBump * .35;     // the counter bumps when coins land in it
+  drawCoin(cx2, top + 52, 8 * cb, null); outlined(String(G.coins), cx2 + 13, top + 52, 17 * (1 + G.coinBump * .15), G.coinBump > .3 ? '#fff3a0' : '#fff');
   const next = T.stations.find(s => !s.done);
   if (next){ houseIcon(24, top + 77, 1); outlined(`Farm stand in ${meters(next.x - G.c.x)} m`, 38, top + 77, 15, '#fff'); }
   // fuel gauge
@@ -910,15 +998,42 @@ function draw(){
     const b = G.banner; let size = Math.round(Math.min(46, VW / 10.5));
     ctx.globalAlpha = Math.min(1, b.life * 1.5);
     ctx.font = `900 ${size}px ${FONT}`;
-    const tw = ctx.measureText(b.text).width + size * .3; if (tw > VW * .92){ size = Math.floor(size * VW * .92 / tw); ctx.font = `900 ${size}px ${FONT}`; }   // always fits a phone ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
-    const by = VH * .27 - (1 - Math.min(1, (2 - b.life) * 4)) * 10;
+    const tw = ctx.measureText(b.text).width + size * .3; if (tw > VW * .92) size = Math.floor(size * VW * .92 / tw);   // always fits a phone
+    // pop in: start a little big and settle
+    const age = (b.max || 2) - b.life, popK = 1 + Math.max(0, .3 - age * 1.8);
+    size = Math.round(size * popK); ctx.font = `900 ${size}px ${FONT}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+    const by = VH * .27;
     ctx.lineWidth = size * .26; ctx.strokeStyle = '#3a1f0c'; ctx.strokeText(b.text, VW / 2, by);
     const gg = ctx.createLinearGradient(0, by - size / 2, 0, by + size / 2); gg.addColorStop(0, '#fff4a8'); gg.addColorStop(.55, '#ffc327'); gg.addColorStop(1, '#f08c00');
     ctx.fillStyle = gg; ctx.fillText(b.text, VW / 2, by);
     ctx.globalAlpha = 1;
   }
+  // coins flying up from a delivery into the counter
+  for (const f of G.flyCoins){ if (f.t < 0) continue; drawCoin(f.x, f.y, 7, G.t + f.x * .01); }
+  const touch = matchMedia('(pointer: coarse)').matches;
+  // before the first input: how to drive, pulsing over the road
+  if (G.waiting && screen === 'play'){
+    const pulse = .75 + Math.sin(performance.now() / 220) * .25, cy = VH * .3;   // in the sky, clear of the truck
+    ctx.globalAlpha = .9;
+    rr(VW / 2 - Math.min(170, VW * .45), cy - 46, Math.min(340, VW * .9), 92, 22); ctx.fillStyle = 'rgba(40,20,8,.55)'; ctx.fill();
+    ctx.globalAlpha = 1;
+    outlined(touch ? 'Hold the right side to drive' : 'Hold → or D to drive', VW / 2, cy - 16, Math.min(24, VW / 16) * (.96 + pulse * .06), '#fff', 'center');
+    outlined(touch ? 'left side to brake' : '← or A to brake', VW / 2, cy + 18, Math.min(17, VW / 22), '#ffe3a6', 'center');
+  }
+  if (G.tip){
+    const k = clamp(G.tip.life, 0, 1), cy = VH * .38, size = Math.min(17, VW / 24);
+    ctx.globalAlpha = k; ctx.font = `900 ${size}px ${FONT}`;
+    const w = Math.min(VW * .92, ctx.measureText(G.tip.text).width + 34);
+    rr(VW / 2 - w / 2, cy - 22, w, 44, 16); ctx.fillStyle = 'rgba(255,248,234,.94)'; ctx.fill();
+    ctx.fillStyle = '#3a1f0c'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    let fs = size; while (ctx.measureText(G.tip.text).width > w - 20 && fs > 10){ fs--; ctx.font = `900 ${fs}px ${FONT}`; }
+    ctx.fillText(G.tip.text, VW / 2, cy + 1); ctx.globalAlpha = 1;
+  }
+  // a soft warm wash while time is slowed
+  if (G.timeScale < .95){ ctx.fillStyle = `rgba(255,220,150,${(1 - G.timeScale) * .18})`; ctx.fillRect(0, 0, VW, VH); }
   // pedals on touch screens
-  if (screen === 'play' && matchMedia('(pointer: coarse)').matches){
+  if (screen === 'play' && touch){
     const pedal = (x, on, label, flip) => {
       ctx.globalAlpha = on ? .95 : .6; ctx.fillStyle = 'rgba(40,20,8,.45)'; rr(x, VH - 100, 96, 84, 22); ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.stroke();
       ctx.fillStyle = '#fff'; ctx.beginPath(); const cx = x + 48, cy = VH - 66; ctx.moveTo(cx - 9 * flip, cy - 11); ctx.lineTo(cx + 11 * flip, cy); ctx.lineTo(cx - 9 * flip, cy + 11); ctx.fill();
@@ -996,7 +1111,7 @@ function resume(){ paused = false; screen = 'play'; show(null); last = performan
 /* ================= Input ================= */
 const keys = {};
 function syncKeys(){ input.gas = keys.ArrowRight || keys.KeyD || keys.ArrowUp || keys.KeyW ? 1 : 0; input.brake = keys.ArrowLeft || keys.KeyA || keys.ArrowDown || keys.KeyS ? 1 : 0; }
-addEventListener('keydown', e => { keys[e.code] = true; if (!touches.size) syncKeys(); if (e.code === 'Escape' || e.code === 'KeyP') screen === 'paused' ? resume() : pause(); if (e.code.startsWith('Arrow') || e.code === 'Space') e.preventDefault(); });
+addEventListener('keydown', e => { keys[e.code] = true; if (screen === 'play') Sound.init(); if (!touches.size) syncKeys(); if (e.code === 'Escape' || e.code === 'KeyP') screen === 'paused' ? resume() : pause(); if (e.code.startsWith('Arrow') || e.code === 'Space') e.preventDefault(); });
 addEventListener('keyup', e => { keys[e.code] = false; if (!touches.size) syncKeys(); });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; touches.clear(); input.gas = input.brake = 0; });
 const touches = new Map();
@@ -1029,8 +1144,15 @@ function frame(t){
   requestAnimationFrame(frame);                 // schedule first, so one bad frame can never freeze the game
   const dt = Math.max(0, Math.min((t - last) / 1000, 1 / 30)); last = t;   // never negative: a frame can be stamped before a click reset `last`
   try {
-    if (G && screen === 'play' && !paused && !G.crashed) update(dt);
+    // hit-stop freezes the world for a beat; slow motion eases in and out
+    let sdt = dt;
+    if (G && screen === 'play' && !paused){
+      if (G.hitStop > 0){ G.hitStop -= dt; sdt = 0; }
+      else { G.timeScale += (G.slowTarget - G.timeScale) * Math.min(1, dt * 7); sdt = dt * G.timeScale; }
+    }
+    if (G && screen === 'play' && !paused && !G.crashed && sdt > 0) update(sdt);
     if (G) moveCamera(dt);
+    if (G){ stepFlyCoins(dt); if (G.crashed) stepJuice(dt); }
     if (G && G.crashed && !G.over){ for (let k = 0; k < 4; k++) stepHens(dt / 4); for (const p of G.parts){ p.vy += GRAV * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt; } }
     draw();
   } catch(err){
@@ -1039,6 +1161,10 @@ function frame(t){
   }
 }
 refreshMenu(); requestAnimationFrame(frame);
+// land straight in the game: the truck waits at the start until the first gas or brake.
+// ?menu opens on the menu; ?debug and ?cover keep the menu too, for the capture tools.
+// Sound starts on that first input (browsers block audio before a tap or key press).
+if (!/[?&](menu|debug|cover)(&|=|$)/.test(location.search)){ newRun(false); input.gas = input.brake = 0; screen = 'play'; paused = false; show(null); last = performance.now(); Portal.gameplayStart(); }
 
 if (/[?&]debug\b/.test(location.search)) window.__hh = {
   get G(){ return G; }, get T(){ return T; }, input, newRun, update, draw, moveCamera, get scale(){ return scale; }, groundY, groundNormal, toLocal, save, stats, show,
