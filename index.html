@@ -289,6 +289,24 @@ const Portal = (() => {
     document.head.appendChild(s);
   });
 
+  // Saved progress. On CrazyGames it must go through their Data Module: it syncs to the player's
+  // account across devices, and their docs require games to rely on it there instead of local saves.
+  // Everywhere else it is plain localStorage. Neither function ever throws.
+  function localGet(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
+  function localSet(k, v){ try { localStorage.setItem(k, v); } catch(e){} }
+  // resolves with the stored string (or null); on the portal it waits for the SDK to finish loading the player's data
+  function loadSave(key){
+    if (!onPortal) return Promise.resolve(localGet(key));
+    return ready.then(() => {
+      if (sdk && sdk.data){ try { return sdk.data.getItem(key); } catch(e){} }
+      return localGet(key);                 // SDK blocked (ad blocker): keep progress on this device
+    });
+  }
+  function writeSave(key, value){
+    if (sdk && sdk.data){ try { sdk.data.setItem(key, value); return; } catch(e){} }
+    localSet(key, value);
+  }
+
   function placeholder(){
     return new Promise(res => {
       adPlaying = true; applyAudio();
@@ -323,7 +341,7 @@ const Portal = (() => {
     onPortal,
     rewarded: () => requestAd('rewarded'),
     interstitial: () => requestAd('midgame'),
-    gameplayStart, gameplayStop,
+    gameplayStart, gameplayStop, loadSave, writeSave,
     happytime(){ if (sdk) try { sdk.game.happytime(); } catch(e){} },
   };
 })();
@@ -342,11 +360,14 @@ const meters = x => Math.max(0, Math.floor(x / PX_PER_M));
 
 /* ================= Save ================= */
 const SAVE_KEY = 'henhaul.v1';
+const parseSave = str => { try { const v = JSON.parse(str); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; } catch(e){ return {}; } };
+// off CrazyGames the save is read straight away; on CrazyGames it comes from their Data Module once the SDK is ready (see boot)
 const save = Object.assign({ coins: 0, best: 0, bestHens: 0, up: {}, muted: false, daily: {}, runs: 0 },
-  (() => { try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || {}; } catch(e){ return {}; } })());
-function persist(){ try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch(e){} }
+  Portal.onPortal ? {} : parseSave((() => { try { return localStorage.getItem(SAVE_KEY); } catch(e){ return null; } })()));
+let saveLoaded = !Portal.onPortal;         // nothing is written until the real save has been read
+function persist(){ if (saveLoaded) Portal.writeSave(SAVE_KEY, JSON.stringify(save)); }
 // a damaged save must never stop the game loading: put back any field that isn't the shape the game expects
-{
+function repairSave(){
   const obj = v => v && typeof v === 'object' && !Array.isArray(v);
   for (const k of ['up', 'daily']) if (!obj(save[k])) save[k] = {};
   for (const k of ['coins', 'best', 'bestHens', 'runs']) if (!Number.isFinite(save[k])) save[k] = 0;
@@ -355,7 +376,11 @@ function persist(){ try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); 
   if (save.streak != null && !obj(save.streak)) save.streak = null;
   if (save.tips != null && !obj(save.tips)) save.tips = null;
   if (typeof save.veh !== 'string') save.veh = 'pickup';
+  save.vehOwned = Array.isArray(save.vehOwned) ? save.vehOwned : ['pickup'];
+  // one-time tips already shown; anyone who has finished a run before counts as having seen them
+  save.tips = save.tips || (save.runs > 0 ? { tilt: 1, stand: 1 } : {});
 }
+repairSave();
 const up = id => save.up[id] || 0;
 const UPGRADES = [
   { id: 'engine', name: 'Engine',      ic: '⚙️', desc: 'More power for steep hills',        base: 40, grow: 1.7, max: 8 },
@@ -365,8 +390,6 @@ const UPGRADES = [
   { id: 'tank',   name: 'Fuel tank',   ic: '⛽', desc: '+25% fuel',                           base: 30, grow: 1.6, max: 6 },
 ];
 const upCost = u => Math.round(u.base * Math.pow(u.grow, up(u.id)));
-// one-time tips already shown; anyone who has finished a run before counts as having seen them
-save.tips = save.tips || (save.runs > 0 ? { tilt: 1, stand: 1 } : {});
 // a short buzz on phones; browsers only allow it after the player has touched the page
 function buzz(ms){ try { if (navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) navigator.vibrate(ms); } catch(e){} }
 
@@ -399,8 +422,6 @@ const VEHICLES = [
   { id: 'monster', name: 'Monster Truck', perk: 'Huge wheels, huge air. Very bouncy!', cost: 700,
     mounts: [[-38, 21], [40, 21]], rest: 14, wheelR: [24, 24], power: 1.15, top: 1.2, ku: .85, cu: .85, cap: 0, tank: 1, air: 1.1, tilt: 1, gripRes: .25, fuelUse: 1, light: [57.5, -10] },
 ];
-save.veh = save.veh || 'pickup';
-save.vehOwned = Array.isArray(save.vehOwned) ? save.vehOwned : ['pickup'];
 const vehicle = () => VEHICLES.find(v => v.id === save.veh && save.vehOwned.includes(v.id)) || VEHICLES[0];
 
 /* ================= Today's jobs (daily missions) and the login streak ================= */
@@ -1560,14 +1581,24 @@ function frame(t){
     if (!loggedErr){ loggedErr = true; console.error('Hen Haul frame error', err); }
   }
 }
-refreshMenu(); requestAnimationFrame(frame);
+requestAnimationFrame(frame);
 addEventListener('pagehide', persist);
-// first open of the day pays the login streak (not in the capture tools)
-if (!/[?&](debug|cover)(&|=|$)/.test(location.search)){ claimStreak(); refreshMenu(); }
-// land straight in the game: the truck waits at the start until the first gas or brake.
-// ?menu opens on the menu; ?debug and ?cover keep the menu too, for the capture tools.
-// Sound starts on that first input (browsers block audio before a tap or key press).
-if (!/[?&](menu|debug|cover)(&|=|$)/.test(location.search)){ newRun(false); input.gas = input.brake = 0; screen = 'play'; paused = false; show(null); last = performance.now(); Portal.gameplayStart(); }
+function boot(){
+  refreshMenu();
+  // first open of the day pays the login streak (not in the capture tools)
+  if (!/[?&](debug|cover)(&|=|$)/.test(location.search)){ claimStreak(); refreshMenu(); }
+  // land straight in the game: the truck waits at the start until the first gas or brake.
+  // ?menu opens on the menu; ?debug and ?cover keep the menu too, for the capture tools.
+  // Sound starts on that first input (browsers block audio before a tap or key press).
+  if (!/[?&](menu|debug|cover)(&|=|$)/.test(location.search)){ newRun(false); input.gas = input.brake = 0; screen = 'play'; paused = false; show(null); last = performance.now(); Portal.gameplayStart(); }
+  else show('menu');
+}
+if (!Portal.onPortal) boot();
+else {
+  // on CrazyGames: the farm scenery shows while the SDK loads the player's save (about a second), then play starts
+  $('menu').classList.remove('on');
+  Portal.loadSave(SAVE_KEY).then(str => { Object.assign(save, parseSave(str)); repairSave(); saveLoaded = true; boot(); });
+}
 
 if (/[?&]debug\b/.test(location.search)) window.__hh = {
   get G(){ return G; }, get T(){ return T; }, input, newRun, update, draw, moveCamera, get scale(){ return scale; }, groundY, groundNormal, toLocal, save, stats, show,
