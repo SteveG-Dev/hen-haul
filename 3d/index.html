@@ -652,6 +652,7 @@ function newTerrain(seed){
   let sx = 120, gap = 170;
   for (let k = 0; k < 60; k++){ T.stations.push({ x: sx * PX_PER_M, done: false, idx: k }); sx += gap; gap += 45; }
 }
+const UP_MAX = 30, UP_MAX_SNOW = 20;          // less grip on snow, so gentler climbs there
 const nearStation = x => T.stations.some(s => Math.abs(s.x - x) < 26 * SEG);
 function extendTerrain(toIdx){
   const r = T.rng;
@@ -659,7 +660,8 @@ function extendTerrain(toIdx){
     const i0 = T.pts.length, x0 = i0 * SEG, d = clamp(x0 / (2200 * PX_PER_M), 0, 1);
     let y = T.pts[i0 - 1];
     const steep = 20 + 15 * d;                       // hills start gentle and get steeper the further you go
-    const push = v => { const last = T.pts[T.pts.length - 1]; T.pts.push(last + clamp(v - last, -steep, steep)); };
+    // climbs are capped at 30 px per segment (about 37 degrees) so every truck can make it up; descents can be steeper
+    const push = v => { const last = T.pts[T.pts.length - 1]; T.pts.push(last + clamp(v - last, -Math.min(steep, zoneIdx(x0) === 2 ? UP_MAX_SNOW : UP_MAX), steep)); };
     if (nearStation(x0 + 8 * SEG)){ for (let k = 0; k < 14; k++) push(y); }
     else {
       const t = r();
@@ -694,8 +696,10 @@ function extendTerrain(toIdx){
 function groundY(x){
   if (x < 0) return T.pts[0];
   const i = Math.floor(x / SEG); if (i + 2 >= T.pts.length) extendTerrain(i + 200);
-  const f = x / SEG - i, k = (1 - Math.cos(f * Math.PI)) / 2;
-  return T.pts[i] * (1 - k) + T.pts[i + 1] * k;
+  // a smooth curve through the points (Catmull-Rom): a steady hill has a steady slope. The old per-segment
+  // S-curve was flat at every point, so climbs became staircases up to 1.6x steeper than the hill itself.
+  const f = x / SEG - i, P = T.pts, p0 = P[i > 0 ? i - 1 : i], p1 = P[i], p2 = P[i + 1], p3 = P[i + 2];
+  return .5 * (2 * p1 + (p2 - p0) * f + (2 * p0 - 5 * p1 + 4 * p2 - p3) * f * f + (3 * p1 - p0 - 3 * p2 + p3) * f * f * f);
 }
 function groundNormal(x){ const s = (groundY(x + 2) - groundY(x - 2)) / 4, m = Math.hypot(s, 1); return { x: s / m, y: -1 / m }; }
 
@@ -743,6 +747,7 @@ function loadHens(){
 
 /* ================= Physics step ================= */
 const GRAV = 900, M = 1, I = 1150, MW = .3;
+const LOW_GEAR = 1.1;
 const FLUTTER_G = .42, FLUTTER_FALL = 230;          // thrown chickens flap: a fraction of gravity, and a top falling speed
 function stepPhysics(h){
   const c = G.c, S = G.S, cs = Math.cos(c.a), sn = Math.sin(c.a);
@@ -780,7 +785,8 @@ function stepPhysics(h){
       if (vn < 0){ if (vn < -260) Sound.land(-vn); w.vx -= vn * 1.1 * n.x; w.vy -= vn * 1.1 * n.y; }
       const tx = -n.y, ty = n.x;                        // surface tangent, pointing forward (right)
       let vt = w.vx * tx + w.vy * ty, acc = 0;
-      if (gas){ acc = vt < S.top ? S.power * gas : 0; }
+      // low gear: up to twice the pull when crawling uphill, so a truck stopped on a hill can always get going again
+      if (gas){ acc = vt < S.top ? S.power * gas * (1 + LOW_GEAR * clamp(1 - vt / 260, 0, 1) * clamp(-ty / .45, 0, 1)) : 0; }   // only on uphill ground, more the steeper it is
       else if (input.brake){ acc = vt > 20 ? -2200 : (vt > -S.top * .4 ? -S.power * .5 : 0); }
       acc *= 1 - (1 - zoneGrip(w.x)) * (1 - G.V.gripRes);     // snow: less grip
       vt += acc * h; vt *= Math.pow(.9, h);
