@@ -60,7 +60,8 @@
 
   .stats{display:flex;justify-content:center;margin-top:16px;color:var(--muted);font-size:13px;font-weight:700}
   .stats>div{flex:1}
-  .stats b{display:block;color:var(--ink);font-size:24px;font-weight:900}
+  .stats b{display:block;color:var(--ink);font-size:clamp(18px,5.4vw,24px);font-weight:900}
+  .stats>div{min-width:0}
   .stats .ic{width:30px;height:30px;margin:0 auto 2px}
   .big{font-size:60px;font-weight:900;line-height:1;margin:4px 0 2px;letter-spacing:-.5px}
   .sub{color:#5a4232;font-weight:700;font-size:16px}
@@ -189,6 +190,7 @@
   <symbol id="u-crate" viewBox="0 0 48 48"><rect x="5" y="9" width="38" height="31" rx="3" fill="url(#g-wood)" stroke="#6b3a14" stroke-width="2"/><path d="M5 19.5h38M5 29.5h38" stroke="#6b3a14" stroke-width="2"/><path d="M8 12l32 25M40 12L8 37" stroke="#7a4418" stroke-width="2.4" opacity=".55"/></symbol>
   <symbol id="u-coop" viewBox="0 0 48 48"><use href="#i-hen"/></symbol>
   <symbol id="u-tank" viewBox="0 0 48 48"><path d="M12 12h18l7 7v21a3 3 0 0 1-3 3H12a3 3 0 0 1-3-3V15a3 3 0 0 1 3-3z" fill="url(#g-can)" stroke="#7d120c" stroke-width="1.6"/><rect x="25" y="5" width="7" height="7" rx="1.5" fill="#3a3f45"/><path d="M14 18h12" stroke="#ffd0c8" stroke-width="2.4" stroke-linecap="round"/><path d="M14 26l14 12M28 26L14 38" stroke="#8f160f" stroke-width="2.2" opacity=".6"/></symbol>
+  <symbol id="i-egg" viewBox="0 0 24 24"><ellipse cx="12" cy="13" rx="7.5" ry="9.5" fill="#fff6e2" stroke="#3a1f0c" stroke-width="1.6"/><ellipse cx="9.5" cy="9.5" rx="2" ry="3" fill="#fff" transform="rotate(-20 9.5 9.5)"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#2fae4e"/><path d="M6.5 12.5l3.6 3.6 7.4-7.6" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-fire" viewBox="0 0 24 24"><path d="M12 2.5c1 3.8 6.5 6.2 6.5 11.8A6.5 6.5 0 0 1 5.5 14.3c0-2.8 1.6-4.5 2.8-5.6.2 2 1 3.3 2.3 3.9C10.2 8.8 10.8 5.5 12 2.5z" fill="#ff6a2e"/><path d="M12 13c1.6 1.4 3 2.6 3 4.4a3 3 0 0 1-6 0c0-1.6 1.2-2.6 3-4.4z" fill="#ffd34d"/></symbol>
 </svg>
@@ -216,6 +218,8 @@
   <div class="best" id="oBest"></div>
   <div class="stats">
     <div><svg class="ic"><use href="#i-hen"/></svg><b id="oHens">0</b>delivered</div>
+    <div><svg class="ic"><use href="#i-check"/></svg><b id="oSaves">0</b>caught</div>
+    <div><svg class="ic"><use href="#i-egg"/></svg><b id="oEggs">0</b>eggs</div>
     <div><svg class="ic"><use href="#i-flip"/></svg><b id="oFlips">0</b>flips</div>
     <div><svg class="ic"><use href="#i-coin"/></svg><b id="oCoins">0</b>coins</div>
   </div>
@@ -446,6 +450,8 @@ const JOBS = [
   { id: 'air3',     text: 'Get big air 3 times',       ev: 'air',      kind: 'add', goal: 3,    reward: 40 },
   { id: 'runs3',    text: 'Play 3 runs',               ev: 'run',      kind: 'add', goal: 3,    reward: 30 },
   { id: 'stands4',  text: 'Reach 4 farm stands',       ev: 'stand',    kind: 'add', goal: 4,    reward: 40 },
+  { id: 'save3',    text: 'Catch 3 falling chickens',  ev: 'save',     kind: 'add', goal: 3,    reward: 50 },
+  { id: 'eggs10',   text: 'Deliver 10 eggs',           ev: 'eggs',     kind: 'add', goal: 10,   reward: 50 },
 ];
 const STREAK_PAY = [20, 30, 40, 50, 60, 80, 100];
 // the same three jobs for everyone on a given day
@@ -629,6 +635,10 @@ const Sound = (() => {
     flip(){ if (!ok()) return; [0, 4, 7, 12].forEach((s, k) => bell(660 * Math.pow(2, s / 12), .07, .4, k * .06)); hiss(.06, .25, 3000, 'highpass'); },
     fuel(){ if (!ok()) return; note(300, 'sine', .08, .25, 0, 2); hiss(.05, .2, 1500, 'bandpass'); },
     land(v){ if (ok()){ hiss(Math.min(.3, v * .0006), .18, 450); note(70, 'sine', Math.min(.2, v * .0004), .15, 0, .6, 0); } },
+    egg(){ if (!ok()) return; note(1400, 'sine', .05, .06, 0, .7); note(2100, 'sine', .03, .08, .05, 0, .4); },
+    crack(){ if (!ok()) return; hiss(.25, .12, 2600, 'highpass'); hiss(.18, .2, 900); [0, .04, .09].forEach(d => note(1800 + Math.random() * 900, 'square', .02, .03, d, .5, 0)); },
+    // a catch: a bright rising chime that climbs with the combo, and a happy cluck
+    save(n = 1){ if (!ok()) return; const k = Math.pow(2, Math.min(n - 1, 4) * 2 / 12); [0, 4, 7, 12].forEach((s, i) => bell(784 * k * Math.pow(2, s / 12), .07, .5, i * .05)); bawk(.12, .12, 520, 1.4); },
     crash(){ if (!ok()) return; hiss(.45, .7, 1400); hiss(.25, 1.2, 300); note(95, 'sawtooth', .22, .55, 0, .4); [0, .12, .26].forEach(d => note(2200 + Math.random() * 1500, 'square', .02, .05, d + .05, .6)); bawk(.15, .25, 520, 1.6); bawk(.4, .22, 600, 1.5); },
   };
 })();
@@ -693,6 +703,7 @@ function groundNormal(x){ const s = (groundY(x + 2) - groundY(x - 2)) / 4, m = M
 // local frame: x forward, y down; chassis body spans y -13..13
 let MOUNTS = VEHICLES[0].mounts, REST = 13;          // set from the chosen vehicle at the start of each run
 const BED = { x0: -60, x1: -3, floor: -13 };
+const EGG_MAX = 12, EGG_EVERY = 8;                     // eggs in the crate at most; chicken-seconds of smooth driving per egg
 const HEN_R = 6.2;
 let G = null, rng = Math.random, screen = 'menu', paused = false, runsSinceAd = 0;
 const input = { gas: 0, brake: 0 };
@@ -713,7 +724,9 @@ function newRun(daily = false){
         // waiting: parked at the start until the first gas/brake (nothing burns or counts before that)
         zoneMax: 0, zoneBanner: null, mDone: 0, coinsSeen: 0,
         waiting: true, hitStop: 0, timeScale: 1, slowTarget: 1, airVy: 0, tip: null,
-        puffs: [], feathers: [], hoppers: [], flyCoins: [], coinStreak: 0, coinT: 0, coinBump: 0 };
+        puffs: [], feathers: [], hoppers: [], flyCoins: [], coinStreak: 0, coinT: 0, coinBump: 0,
+        // catching chickens back, and eggs laid on smooth stretches
+        saves: 0, saveCombo: 0, saveT: 0, eggs: 0, eggT: 0, bumpT: 0, eggsSold: 0, eggBump: 0 };
   loadHens();
 }
 const toWorld = (lx, ly) => { const c = G.c, cs = Math.cos(c.a), sn = Math.sin(c.a); return { x: c.x + lx * cs - ly * sn, y: c.y + lx * sn + ly * cs }; };
@@ -730,6 +743,7 @@ function loadHens(){
 
 /* ================= Physics step ================= */
 const GRAV = 900, M = 1, I = 1150, MW = .3;
+const FLUTTER_G = .42, FLUTTER_FALL = 230;          // thrown chickens flap: a fraction of gravity, and a top falling speed
 function stepPhysics(h){
   const c = G.c, S = G.S, cs = Math.cos(c.a), sn = Math.sin(c.a);
   const ux = -sn, uy = cs, lx = cs, ly = sn;          // chassis "down" axis and forward axis in world
@@ -797,10 +811,21 @@ function stepPhysics(h){
 function stepHens(h){
   const c = G.c, wall = G.S.wall;
   for (const e of G.hens){
-    const vx = (e.x - e.px), vy = (e.y - e.py);
+    let vx = (e.x - e.px), vy = (e.y - e.py);
     e.px = e.x; e.py = e.y;
-    e.x += vx * .998; e.y += vy * .998 + GRAV * h * h;
-    let L = toLocal(e.x, e.y), touched = false;
+    const flying = !e.aboard && !e.loose;
+    if (flying){
+      // a thrown chicken flaps: less gravity, a gentle top speed when falling, and air drag
+      vy = Math.min(vy, FLUTTER_FALL * h); vx *= .997;
+      // over the crate and falling: a soft pull toward the middle of the bed, matching the truck's speed
+      const L0 = toLocal(e.x, e.y);
+      if (L0.x > BED.x0 - 46 && L0.x < BED.x1 + 34 && L0.y < BED.floor && L0.y > BED.floor - 170 && vy > 0 && Math.cos(c.a) > .5){
+        const mid = toWorld((BED.x0 + BED.x1) / 2, L0.y), tvx = c.vx * h;
+        vx += (tvx - vx) * .05; const d = clamp(mid.x - e.x, -90 * h, 90 * h); e.x += d; e.px += d;
+      }
+      e.x += vx; e.y += vy + GRAV * FLUTTER_G * h * h;
+    } else { e.x += vx * .998; e.y += vy * .998 + GRAV * h * h; }
+    let L = toLocal(e.x, e.y), touched = false, roof = false;
     const insideX = L.x > BED.x0 - 2 && L.x < BED.x1 + 2;
     // floor
     if (insideX && L.y > BED.floor - HEN_R && L.y < 6){ L.y = BED.floor - HEN_R; touched = true; }
@@ -808,7 +833,7 @@ function stepHens(h){
     if (L.y > BED.floor - wall && L.x < BED.x0 + HEN_R && L.x > BED.x0 - 6){ L.x = BED.x0 + HEN_R; touched = true; }
     if (L.y > -44 && L.x > BED.x1 - HEN_R && L.x < BED.x1 + 8){ L.x = BED.x1 - HEN_R; touched = true; }
     // landing on the cab roof or hood
-    if (L.x >= BED.x1 + 8 && L.x < 58 && L.y > (L.x < 40 ? -44 : -10) - HEN_R && L.y < 10){ L.y = (L.x < 40 ? -44 : -10) - HEN_R; touched = true; }
+    if (L.x >= BED.x1 + 8 && L.x < 58 && L.y > (L.x < 40 ? -44 : -10) - HEN_R && L.y < 10){ L.y = (L.x < 40 ? -44 : -10) - HEN_R; touched = true; roof = true; }
     if (touched){
       const p = toWorld(L.x, L.y); e.x = p.x; e.y = p.y;
       // friction: drag the hen's velocity toward the truck's at that point
@@ -816,9 +841,13 @@ function stepHens(h){
       const nvx = v.x + (hvx - v.x) * .9, nvy = v.y + (hvy - v.y) * .9;
       e.px = e.x - nvx * h; e.py = e.y - nvy * h;
     }
+    // a thrown chicken that lands on the cab roof slides back into the crate
+    if (roof && !e.aboard){ const bx = -Math.cos(c.a) * 80 * h, by = -Math.sin(c.a) * 80 * h; e.x += bx; e.y += by; e.px += bx; e.py += by; }
     // ground for hens that fell off
     const gy = groundY(e.x);
     if (e.y > gy - HEN_R){ e.y = gy - HEN_R; e.px = e.x - (e.x - e.px) * .5; e.py = e.y; if (!e.aboard) e.loose = true; }
+    // on the road: a chicken hops about now and then
+    if (e.loose && e.y >= gy - HEN_R - .5 && Math.random() < h * .9){ const dir = Math.random() < .5 ? -1 : 1; e.py = e.y + 150 * h; e.px = e.x - dir * 30 * h; e.face = dir; }
   }
   // hens push each other
   for (let i = 0; i < G.hens.length; i++) for (let j = i + 1; j < G.hens.length; j++){
@@ -846,13 +875,27 @@ function update(dt){
     const L = toLocal(e.x, e.y);
     const inBed = L.x > BED.x0 - 4 && L.x < BED.x1 + 4 && L.y < BED.floor + 2 && L.y > BED.floor - G.S.wall - 70;
     if (e.aboard && !inBed && (L.x < BED.x0 - 22 || L.y < BED.floor - G.S.wall - 70 || L.x > 70)){
-      e.aboard = false; Sound.cluck(); G.texts.push({ x: e.x, y: e.y - 20, v: 'BAWK!', life: 1, max: 1, c: '#fff', pop: true });
+      e.aboard = false; e.tossed = true; Sound.cluck(); G.texts.push({ x: e.x, y: e.y - 20, v: 'BAWK!', life: 1, max: 1, c: '#fff', pop: true });
+      if (!save.tips.catch && !G.crashed){ save.tips.catch = 1; persist(); G.tip = { text: 'Drive under a falling chicken to catch it!', life: 3.6 }; }
       // a puff of feathers where it left the crate
       for (let k = 0; k < 9; k++){ const a = Math.random() * TAU, s = 40 + Math.random() * 110; G.feathers.push({ x: e.x, y: e.y, vx: Math.cos(a) * s + c.vx * .4, vy: Math.sin(a) * s - 60 + c.vy * .3, rot: Math.random() * TAU, vr: (Math.random() - .5) * 10, life: 1 + Math.random() * .6 }); }
     }
-    else if (!e.aboard && !e.loose && inBed && L.y > BED.floor - G.S.wall) e.aboard = true;   // caught it!
+    else if (!e.aboard && !e.loose && inBed && L.y > BED.floor - G.S.wall - 12){ e.aboard = true; if (!G.crashed) caught(e); }   // caught it!
     e.flap = e.aboard && Math.abs(e.y - e.py) < .4 ? 0 : (e.flap + dt * 20);
   }
+  // a chicken on the road hops back in when you roll slowly past it (if there's room)
+  const aboardN = G.hens.filter(e => e.aboard).length;
+  if (!G.crashed && aboardN < G.S.cap && Math.abs(c.vx) < 170 && Math.cos(c.a) > .7) for (const e of G.hens){
+    if (!e.loose) continue;
+    const bc = toWorld((BED.x0 + BED.x1) / 2, BED.floor - 10);
+    if (Math.abs(e.x - bc.x) < 60 && Math.abs(e.y - bc.y) < 70){
+      e.loose = false; e.hopIn = true; e.tossed = false;
+      const T = .32, vxh = (bc.x - e.x) / T + c.vx, vyh = (bc.y - e.y) / T - .5 * GRAV * FLUTTER_G * T;
+      e.px = e.x - vxh / 480; e.py = e.y - vyh / 480;
+      Sound.cluck(); break;
+    }
+  }
+  G.saveT -= dt; if (G.saveT <= 0) G.saveCombo = 0;
   // drop hens far behind
   G.hens = G.hens.filter(e => e.aboard || e.x > c.x - 2000);
 
@@ -873,7 +916,22 @@ function update(dt){
   }
   // a moment of slow motion near the top of a big jump
   G.slowTarget = air && G.airT > .7 && G.airT < 1.35 && !G.crashed ? .6 : 1;
+  if (!G.crashed) for (const e of G.hens){ if (!e.tossed || e.aboard || e.loose) continue; const L = toLocal(e.x, e.y);
+    if (L.x > BED.x0 - 20 && L.x < BED.x1 + 10 && L.y < BED.floor - G.S.wall && L.y > BED.floor - G.S.wall - 60 && e.y > e.py){ G.slowTarget = Math.min(G.slowTarget, .45); break; } }
 
+  // eggs: every chicken aboard adds to the clutch while the ride is smooth
+  G.bumpT = Math.max(0, G.bumpT - dt); G.eggBump = Math.max(0, G.eggBump - dt * 3);
+  const smooth = !air && !G.crashed && !G.waiting && Math.abs(c.w) < 1.1 && Math.hypot(c.vx, c.vy) > 50 && G.bumpT <= 0;
+  if (smooth && G.eggs < EGG_MAX){
+    const layers = G.hens.filter(e => e.aboard);
+    G.eggT += dt * layers.length;
+    if (G.eggT >= EGG_EVERY && layers.length){
+      G.eggT = 0; G.eggs++; G.eggBump = 1;
+      const e = layers[Math.floor(Math.random() * layers.length)];
+      G.texts.push({ x: e.x, y: e.y - 16, v: '+1 EGG', life: .9, max: .9, c: '#fff6d8', pop: true }); Sound.egg();
+      if (!save.tips.egg){ save.tips.egg = 1; persist(); G.tip = { text: 'Smooth driving lays eggs. Hard landings crack them!', life: 3.8 }; }
+    }
+  }
   // pickups
   G.coinT += dt; if (G.coinT > 1.2) G.coinStreak = 0;
   for (const k of T.coins){ if (k.got || Math.abs(k.x - c.x) > 80) continue; const ky = groundY(k.x) - k.lift; if (Math.hypot(k.x - c.x, ky - c.y) < 60){ k.got = true; G.coins++; Sound.coin(G.coinStreak++); G.coinT = 0; G.coinBump = 1; sparkle(k.x, ky, 6, '#ffe680'); } }
@@ -883,10 +941,10 @@ function update(dt){
     if (s.done || c.x < s.x) continue;
     s.done = true;
     const aboardNow = G.hens.filter(e => e.aboard), n = aboardNow.length;
-    const pay = n * (10 + s.idx * 3);
-    G.delivered += n; G.coins += pay; G.fuel = S.tank;
-    job('stand'); if (n) job('deliver', n); if (n && n >= G.S.cap) job('fullLoad');
-    G.banner = { text: n ? `${n} 🐔 DELIVERED  +${pay}` : 'NO CHICKENS LEFT!', life: 2, max: 2 };
+    const eggs = G.eggs, pay = n * (10 + s.idx * 3) + eggs * (6 + s.idx * 2);
+    G.delivered += n; G.coins += pay; G.fuel = S.tank; G.eggsSold += eggs; G.eggs = 0; G.eggT = 0;
+    job('stand'); if (n) job('deliver', n); if (n && n >= G.S.cap) job('fullLoad'); if (eggs) job('eggs', eggs);
+    G.banner = { text: n || eggs ? `${n ? n + ' 🐔 ' : ''}${eggs ? eggs + ' 🥚 ' : ''}DELIVERED  +${pay}` : 'NO CHICKENS LEFT!', life: 2, max: 2 };
     Sound.deliver(n);
     // the chickens hop off onto the counter, and the pay flies up to your coin counter
     const gy = groundY(s.x);
@@ -949,12 +1007,34 @@ function toScreen(x, y){ return { x: VW / 2 + (x - G.cam.x) * scale, y: VH * hor
 function landed(v){
   if (v < 120) return;
   const k = clamp((v - 120) / 700, 0, 1);
+  G.bumpT = Math.max(G.bumpT, .4 + k * 1.4);            // no eggs for a moment after a bump
+  // a hard landing cracks some of the eggs
+  if (v > 380 && G.eggs > 0){
+    const lost = Math.min(G.eggs, Math.max(1, Math.ceil(G.eggs * clamp((v - 380) / 800, .15, 1))));
+    G.eggs -= lost; Sound.crack();
+    const bc = toWorld((BED.x0 + BED.x1) / 2, BED.floor - 4);
+    G.texts.push({ x: bc.x, y: bc.y - 26, v: `CRACK! -${lost} EGG${lost > 1 ? 'S' : ''}`, life: 1.2, max: 1.2, c: '#ffd34d', pop: true });
+    for (let i = 0; i < lost * 5; i++){ const a = -Math.PI / 2 + (Math.random() - .5) * 2.2, s = 80 + Math.random() * 160; G.parts.push({ x: bc.x + (Math.random() - .5) * 40, y: bc.y, vx: Math.cos(a) * s + G.c.vx * .5, vy: Math.sin(a) * s, life: .5 + Math.random() * .4, c: i % 3 ? '#ffc327' : '#fff8e8', s: 2 + Math.random() * 3 }); }
+  }
   G.shake = Math.max(G.shake, 2 + k * 9); Sound.thud(v);
   if (k > .35) buzz(Math.round(15 + k * 30));
   for (const w of G.wheels){
     const n = 4 + Math.round(k * 10), gy = groundY(w.x);
     for (let i = 0; i < n; i++){ const dir = Math.random() < .5 ? -1 : 1; G.puffs.push({ x: w.x + (Math.random() - .5) * 10, y: gy - 3, vx: dir * (40 + Math.random() * 120 * (.5 + k)), vy: -20 - Math.random() * 60 * (.5 + k), r: 4 + Math.random() * 5 + k * 6, life: .5 + Math.random() * .4, max: .9 }); }
   }
+}
+// a chicken landed back in the crate: from the air it's a save (combos within 3 s), from the road it hopped in
+function caught(e){
+  if (e.hopIn){ e.hopIn = false; G.texts.push({ x: e.x, y: e.y - 20, v: 'HOP IN!', life: 1, max: 1, c: '#c8ffb0', pop: true }); Sound.pop(); return; }
+  if (!e.tossed) return;
+  e.tossed = false;
+  G.saveCombo = G.saveT > 0 ? G.saveCombo + 1 : 1; G.saveT = 3; G.saves++;
+  const bonus = 5 * G.saveCombo; G.coins += bonus; job('save');
+  const name = ['SAVED!', 'DOUBLE SAVE!', 'TRIPLE SAVE!', 'MEGA SAVE!'][Math.min(3, G.saveCombo - 1)];
+  G.banner = { text: `${name}  +${bonus}`, life: 1.3, max: 1.3 };
+  G.texts.push({ x: e.x, y: e.y - 24, v: 'CAUGHT!', life: 1, max: 1, c: '#7dff9a', pop: true });
+  sparkle(e.x, e.y, 14, '#7dff9a'); Sound.save(G.saveCombo); buzz(25);
+  G.hitStop = Math.max(G.hitStop, .05);
 }
 function sparkle(x, y, n, c){ for (let i = 0; i < n; i++){ const a = Math.random() * TAU, s = 60 + Math.random() * 160; G.parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 80, life: .35 + Math.random() * .35, c: Math.random() < .5 ? c : '#fff', s: 2.5 + Math.random() * 2.5, spark: true }); } }
 function stepJuice(dt){
@@ -1377,6 +1457,7 @@ let failed3D = false;
 addEventListener('world3dfail', () => { failed3D = true; });
 function drawTruckAndCargo(P){
   drawTruck();
+  for (let i = 0; i < G.eggs; i++){ const q = toWorld(BED.x0 + 6 + (i % 6) * 9, BED.floor - 3.5 - Math.floor(i / 6) * 6); ctx.fillStyle = '#fff6e2'; ctx.beginPath(); ctx.ellipse(q.x, q.y, 3.4, 4.2, G.c.a, 0, TAU); ctx.fill(); }
   if (P.night > .02) headlight(P.night);
   for (const e of G.hens) if (e.aboard) drawHen(e, G.t);
   // delivered chickens hop from the crate onto the counter, then stay a moment
@@ -1492,6 +1573,9 @@ function drawOverlay(camX, camY, sx, sy, inWorld){
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0); G.coinHud = { x: cx2, y: top + 52 };
   const cb = 1 + G.coinBump * .35;     // the counter bumps when coins land in it
   drawCoin(cx2, top + 52, 8 * cb, null); outlined(String(G.coins), cx2 + 13, top + 52, 17 * (1 + G.coinBump * .15), G.coinBump > .3 ? '#fff3a0' : '#fff');
+  { const ex = cx2 + 13 + ctx.measureText(String(G.coins)).width + 22, eb = 1 + G.eggBump * .3;
+    ctx.save(); ctx.translate(ex, top + 52); ctx.scale(eb, eb); ctx.fillStyle = '#fff6e2'; ctx.strokeStyle = '#3a1f0c'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(0, 0, 6, 7.6, 0, 0, TAU); ctx.fill(); ctx.stroke(); ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.beginPath(); ctx.ellipse(-2, -2.6, 1.6, 2.4, -.4, 0, TAU); ctx.fill(); ctx.restore();
+    outlined(String(G.eggs), ex + 12, top + 52, 17, G.eggBump > .3 ? '#fff3a0' : '#fff'); }
   const next = T.stations.find(s => !s.done);
   if (next){ houseIcon(24, top + 77, 1); outlined(`Farm stand in ${meters(next.x - G.c.x)} m`, 38, top + 77, 15, '#fff'); }
   // a heads-up when the next zone is close
@@ -1592,7 +1676,7 @@ function showOver(){
   persist();
   $('oTitle').textContent = G.reason || 'Crashed!';
   $('oDist').textContent = m + ' m'; $('oBest').textContent = best ? 'New best!' : 'Best ' + save.best + ' m';
-  $('oHens').textContent = G.delivered; $('oFlips').textContent = G.flips; $('oCoins').textContent = G.coins;
+  $('oHens').textContent = G.delivered; $('oFlips').textContent = G.flips; $('oCoins').textContent = G.coins; $('oSaves').textContent = G.saves; $('oEggs').textContent = G.eggsSold;
   $('reviveBtn').style.display = G.revived || G.parked || G.reason === 'Out of fuel' ? 'none' : 'flex';
   $('doubleBtn').style.display = G.doubled || G.coins < 5 ? 'none' : 'flex';
   $('shareBtn').style.display = G.daily ? 'flex' : 'none';
@@ -1738,7 +1822,7 @@ if (/[?&]debug\b/.test(location.search)) window.__hh = {
   },
   get screen(){ return screen; }, set screen(v){ screen = v; }, setView(w, h){ VW = w; VH = h; scale = fitScale(); },
 };
-window.HH3D = { vehicle, get G(){ return G; }, get T(){ return T; }, groundY, palAt, ZONES, zoneIdx, BED, toWorld, get MOUNTS(){ return MOUNTS; }, PX_PER_M, skyImage,
+window.HH3D = { vehicle, EGG_MAX, toLocal, get G(){ return G; }, get T(){ return T; }, groundY, palAt, ZONES, zoneIdx, BED, toWorld, get MOUNTS(){ return MOUNTS; }, PX_PER_M, skyImage,
   get scale(){ return scale; }, get VW(){ return VW; }, get VH(){ return VH; }, get dpr(){ return dpr; }, horizon, COVER,
   ensureTerrain(){ if (!T){ newTerrain(20261106); extendTerrain(400); } } };
 })();

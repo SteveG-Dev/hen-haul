@@ -411,6 +411,13 @@ function hideTruck(t){ t.visible = false; for (const p of t.userData.wheels) for
 
 // ---------- chickens, coins, cans, stands, posts (pooled) ----------
 const henPool = [];
+// eggs in the crate, and a shadow under every falling chicken (green when it's over the crate)
+const eggGeo = new THREE.SphereGeometry(1, 12, 9), eggMat = new THREE.MeshStandardMaterial({ color: 0xfff4e0, roughness: .45 });
+const eggPool = [];
+function egg(i){ while (eggPool.length <= i){ const m = new THREE.Mesh(eggGeo, eggMat); m.scale.set(3.4, 4.3, 3.4); m.castShadow = true; scene.add(m); eggPool.push(m); } return eggPool[i]; }
+const shadowGeo = new THREE.CircleGeometry(1, 24).rotateX(-Math.PI / 2);
+const shadowPool = [];
+function shadowAt(i){ while (shadowPool.length <= i){ const m = new THREE.Mesh(shadowGeo, new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: .3, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 })); m.renderOrder = 1; scene.add(m); shadowPool.push(m); } return shadowPool[i]; }
 function hen(i){ while (henPool.length <= i){ const h = chickenModel(); scene.add(h); henPool.push(h); } return henPool[i]; }
 const coinGeo = new THREE.CylinderGeometry(8.5, 8.5, 2.6, 18), coinMat = new THREE.MeshStandardMaterial({ color: 0xffc62e, roughness: .3, metalness: .55, emissive: 0xb87400, emissiveIntensity: .55 });
 const coinPool = [];
@@ -641,6 +648,24 @@ function render(camX, camY, sx = 0, sy = 0, now = performance.now() / 1000){
     }
   }
   for (let i = henI; i < henPool.length; i++) henPool[i].visible = false;
+  let ei = 0, shi = 0;
+  if (G){
+    const c = G.c, BED = H.BED;
+    for (let i = 0; i < Math.min(G.eggs, H.EGG_MAX); i++){
+      const p = local(c, BED.x0 + 6 + (i % 6) * 9, BED.floor - 3.6 - Math.floor(i / 6) * 6), m = egg(ei++);
+      m.visible = true; m.position.set(p.x, -p.y, ((i * 7) % 5 - 2) * 6.5); m.rotation.set(0, 0, -c.a + (hash(i) - .5) * .6);
+    }
+    for (const e of G.hens){
+      if (e.aboard || e.loose || !e.tossed) continue;
+      const gyv = H.groundY(e.x), hgt = gyv - e.y, L = H.toLocal(e.x, e.y);
+      const over = L.x > BED.x0 - 20 && L.x < BED.x1 + 10 && L.y < BED.floor;
+      const m = shadowAt(shi++), zOff = (hash(e.id * 7.31) - .5) * 22 * 1.6, k = Math.max(.35, 1 - hgt / 500);
+      m.visible = true; m.position.set(e.x, -gyv + 2, zOff); m.rotation.z = -Math.atan2(H.groundY(e.x + 10) - H.groundY(e.x - 10), 20); m.scale.setScalar(over ? 20 : 15 * k);
+      m.material.color.set(over ? 0x3cff6a : 0x1a1008); m.material.opacity = over ? .6 : .42 * k;
+    }
+  }
+  for (let i = ei; i < eggPool.length; i++) eggPool[i].visible = false;
+  for (let i = shi; i < shadowPool.length; i++) shadowPool[i].visible = false;
 
   // pickups and stands in view
   const L = camX - half * 1.4 - 120, R = camX + half * 1.4 + 120;
