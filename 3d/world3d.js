@@ -8,7 +8,7 @@ const H = window.HH3D;
 const TAU = Math.PI * 2;
 const FOV = 30, ELEV = 230;                 // camera field of view, and how far above the action it sits
 const ROAD_BACK = -110, ROAD_FRONT = 100;    // the road's depth (z)
-const CW = 1600;                             // terrain chunk width (world px)
+const CW = 800;                                  // terrain chunk width (world px)
 
 const glCanvas = document.getElementById('gl');
 let renderer;
@@ -18,7 +18,7 @@ try {
 
 if (!renderer || !H) dispatchEvent(new Event('world3dfail'));
 if (renderer && H){
-const lowEnd = (navigator.hardwareConcurrency || 4) <= 4 && matchMedia('(pointer: coarse)').matches;
+const touchDevice = matchMedia('(pointer: coarse)').matches, lowEnd = (navigator.hardwareConcurrency || 4) <= 4 && touchDevice;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.08;
@@ -34,7 +34,7 @@ const hemi = new THREE.HemisphereLight(0xe8f0ff, 0x8a6a40, 1.25);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff0d6, 2.6);
 sun.castShadow = true;
-sun.shadow.mapSize.set(lowEnd ? 1024 : 2048, lowEnd ? 1024 : 2048);
+sun.shadow.mapSize.set(touchDevice ? 1024 : 2048, touchDevice ? 1024 : 2048);
 Object.assign(sun.shadow.camera, { left: -900, right: 900, top: 700, bottom: -700, near: 10, far: 4000 });
 sun.shadow.bias = -0.0006; sun.shadow.normalBias = 1.2;
 scene.add(sun, sun.target);
@@ -476,10 +476,14 @@ function updateSky(P){
 
 // ---------- per frame ----------
 const terrain = new Map(), far = new Map(); let lastT = null;
-function syncChunks(map, w, build, lo, hi){
-  const a = Math.floor(lo / w), b = Math.floor(hi / w);
+// chunks on screen are built at once if missing; chunks just off screen are built ahead, one per frame,
+// so building never lands as one big hitch on a slow phone
+function syncChunks(map, w, build, lo, hi, plo, phi, budget = 1){
+  const a = Math.floor(lo / w), b = Math.floor(hi / w), pa = Math.floor(plo / w), pb = Math.floor(phi / w);
   for (let i = a; i <= b; i++) if (!map.has(i)){ const m = build(i); scene.add(m); map.set(i, m); }
-  for (const [i, m] of map) if (i < a - 1 || i > b + 1){ scene.remove(m); m.traverse(o => { if (o.geometry) o.geometry.dispose(); }); map.delete(i); }
+  for (let i = b + 1; i <= pb && budget > 0; i++) if (!map.has(i)){ const m = build(i); scene.add(m); map.set(i, m); budget--; }          // ahead first: you drive right
+  for (let i = a - 1; i >= pa && budget > 0; i--) if (!map.has(i)){ const m = build(i); scene.add(m); map.set(i, m); budget--; }
+  for (const [i, m] of map) if (i < pa - 1 || i > pb + 1){ scene.remove(m); m.traverse(o => { if (o.geometry) o.geometry.dispose(); }); map.delete(i); }
 }
 function clearChunks(){ for (const map of [terrain, far]){ for (const [, m] of map){ scene.remove(m); m.traverse(o => { if (o.geometry) o.geometry.dispose(); }); } map.clear(); } }
 
@@ -565,11 +569,15 @@ function menuPose(V, x, now){
 // ---------- quality: step down automatically when frames run slow (weak phones) ----------
 // level 0: full; 1: lower resolution; 2: no shadows; 3: resolution 1x, fewer effects
 const Q = { level: 0, maxRes: 2, ema: 16.7, last: 0, slowFor: 0 };
+// never switch shadows off at runtime: that recompiles every material (a half-second freeze on a phone).
+// Shrinking the shadow map just reallocates one texture.
 function setQuality(l){
-  Q.level = l; Q.maxRes = [2, 1.5, 1.5, 1][l]; sun.castShadow = l < 2;
+  Q.level = l; Q.maxRes = [2, 1.5, 1.25, 1][l];
+  const sz = [2048, 1024, 512, 512][l];
+  if (sun.shadow.mapSize.x !== sz){ sun.shadow.mapSize.set(sz, sz); if (sun.shadow.map){ sun.shadow.map.dispose(); sun.shadow.map = null; } }
   for (const c of clouds) c.visible = l < 3;
 }
-if (/[?&]lowgfx(&|=|$)/.test(location.search)) setQuality(3); else if (lowEnd) setQuality(1);
+if (/[?&]lowgfx(&|=|$)/.test(location.search)) setQuality(3); else if (lowEnd) setQuality(2); else if (touchDevice) setQuality(1);     // phones start a step down: 1.5x pixels looks the same on a small screen
 function governor(now){
   const dt = (now - Q.last) * 1000; Q.last = now;
   if (dt <= 0 || dt > 200 || document.hidden) return;          // skip tab switches and stalls
@@ -605,8 +613,8 @@ function render(camX, camY, sx = 0, sy = 0, now = performance.now() / 1000){
 
   // world chunks around the camera (wider for things far behind)
   const half = VW / 2 / k;
-  syncChunks(terrain, CW, buildTerrain, camX - half * 2.2 - 400, camX + half * 2.2 + 600);
-  syncChunks(far, FARW, buildFar, camX - half * 6 - 3000, camX + half * 6 + 3000);
+  syncChunks(terrain, CW, buildTerrain, camX - half * 1.6 - 200, camX + half * 1.6 + 300, camX - half * 2.2 - 400, camX + half * 2.2 + 1800);
+  syncChunks(far, FARW, buildFar, camX - half * 5 - 2000, camX + half * 5 + 2000, camX - half * 6 - 3000, camX + half * 6 + 6000);
   for (const c of clouds){ const u = c.userData, span = 12000; c.position.set(camX * .7 + (((u.off - now * 8 - camX * .3) % span) + span) % span - span / 2, -camY + u.h, u.z); }
 
   // the truck
@@ -635,6 +643,7 @@ function render(camX, camY, sx = 0, sy = 0, now = performance.now() / 1000){
       h.position.set(e.x, -e.y, e.aboard ? zOff : zOff * 1.6);
       const tilt = e.aboard ? -c.a : Math.sin(now * 9 + e.id * 10) * .5;
       h.rotation.set(0, e.loose ? Math.sin(e.id * 31) * 1.2 : 0, tilt);
+      h.scale.setScalar(e.tossed && !e.aboard && window.__coverHens ? window.__coverHens : 1);      // covers only: flying chickens drawn larger so they read at thumbnail size
       const fl = e.flap ? Math.sin(e.flap) * .9 : 0;
       h.userData.wings.forEach((w, s) => w.rotation.x = (s ? 1 : -1) * (fl * 1.2));
       h.userData.legs.forEach(l => l.visible = !e.aboard || !!e.loose);
@@ -734,6 +743,6 @@ function preview(V){
   return url;
 }
 glCanvas.addEventListener('webglcontextlost', e => { e.preventDefault(); window.World3D = null; glCanvas.style.display = 'none'; dispatchEvent(new Event('world3dfail')); });   // the 2D game takes over
-window.World3D = { preview, ok: true, render, scene, camera, far, terrain, THREE, Q, setQuality };
+window.World3D = { preview, ok: true, render, scene, camera, far, terrain, THREE, Q, setQuality, buildTerrain, buildFar };
 dispatchEvent(new Event('world3d'));
 }

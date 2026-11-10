@@ -1815,7 +1815,7 @@ else {
 }
 
 if (/[?&]debug\b/.test(location.search)) window.__hh = {
-  get G(){ return G; }, get T(){ return T; }, input, newRun, update, draw, moveCamera, get scale(){ return scale; }, groundY, groundNormal, toLocal, save, stats, show,
+  get G(){ return G; }, get T(){ return T; }, input, newRun, update, draw, moveCamera, get scale(){ return scale; }, groundY, groundNormal, toLocal, toWorld, EGG_MAX, save, stats, show,
   Sound, VEHICLES, ZONES, zoneIdx, job, jobsToday, claimStreak, renderGarage, refreshMenu, popCard,
   setVehicle(id){ if (!save.vehOwned.includes(id)) save.vehOwned.push(id); save.veh = id; },
   // jump the truck to a distance (for testing and screenshots)
