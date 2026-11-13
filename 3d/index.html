@@ -116,6 +116,18 @@
   .job.done .jt{color:#2f8f45}
   .job.done .jr{color:#2f8f45}
   .job.done .bar i{background:linear-gradient(90deg,#6fdc85,#2fae4e)}
+  .jobs .jh2{margin-top:4px}
+  .cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin:4px 0 6px}
+  .cal div{border-radius:10px;background:#f6ecd9;border:2px solid #eadcc3;padding:3px 1px 3px;text-align:center;font-size:10px;font-weight:900;color:#9a8268;line-height:1.1;min-width:0}
+  .cal b{display:flex;align-items:center;justify-content:center;gap:1px;height:22px;font-size:12px;color:#b86e00}
+  .cal b svg{width:11px;height:11px;flex:none}
+  .cal img{max-height:22px;max-width:100%;width:auto}
+  .cal .got{background:#e6f8ea;border-color:#9ee0ac;color:#1f7a35}
+  .cal .got b{color:#1f7a35}
+  .cal .next{background:#fff6d6;border-color:#ffc327;color:#8a5a00;box-shadow:0 0 0 2px rgba(255,195,39,.35)}
+  .tmrw{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;padding:8px 12px;border-radius:14px;background:#fff6d6;border:2px solid #ffc327;font-size:13.5px;font-weight:700;color:#5a3a12;text-align:left;line-height:1.3}
+  .tmrw b{font-weight:900;color:#2b1a0e}
+  .tmrw svg{width:20px;height:20px;flex:none;color:#b86e00}
   .jobsMini{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:12px}
   .jobsMini span{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:999px;background:#fff;border:2px solid var(--line);font-size:12.5px;font-weight:800;color:#5a4232}
   .jobsMini span.done{background:#e6f8ea;border-color:#9ee0ac;color:#1f7a35}
@@ -223,6 +235,7 @@
     <div><svg class="ic"><use href="#i-flip"/></svg><b id="oFlips">0</b>flips</div>
     <div><svg class="ic"><use href="#i-coin"/></svg><b id="oCoins">0</b>coins</div>
   </div>
+  <div class="tmrw" id="oTmrw"></div>
   <div class="jobsMini" id="oJobs"></div>
   <button class="btn ad" id="reviveBtn"><svg><use href="#i-play"/></svg><span class="tx">Back on your wheels<small>Watch a short ad · keep your chickens</small></span></button>
   <button class="btn adgold" id="doubleBtn"><svg><use href="#i-coin"/></svg><span class="tx">Double your coins<small>Watch a short ad</small></span></button>
@@ -453,7 +466,30 @@ const JOBS = [
   { id: 'save3',    text: 'Catch 3 falling chickens',  ev: 'save',     kind: 'add', goal: 3,    reward: 50 },
   { id: 'eggs10',   text: 'Deliver 10 eggs',           ev: 'eggs',     kind: 'add', goal: 10,   reward: 50 },
 ];
-const STREAK_PAY = [20, 30, 40, 50, 60, 80, 100];
+// the daily gift calendar: something every day you come back, a free truck on days 3 and 7 (its price in coins if you already own it);
+// missing a day starts the week again
+const STREAK_GIFTS = [{ coins: 20 }, { coins: 40 }, { veh: 'tractor' }, { coins: 60 }, { coins: 80 }, { coins: 100 }, { veh: 'monster' }];
+const giftOf = n => STREAK_GIFTS[(n - 1) % 7];
+const vehById = id => VEHICLES.find(v => v.id === id);
+const giftFree = g => g.veh && !save.vehOwned.includes(g.veh);
+const giftCoins = g => g.veh ? vehById(g.veh).cost : g.coins;
+const giftText = g => giftFree(g) ? 'free ' + vehById(g.veh).name : giftCoins(g) + ' coins';
+const streakToday = () => save.streak && save.streak.last === dayKey() ? save.streak.n : 0;
+// what the end-of-run screen promises for tomorrow, plus the next free truck if tomorrow is only coins
+function tomorrowLine(){
+  const n = streakToday() + 1, g = giftOf(n);
+  let s = `Come back tomorrow for <b>${giftText(g)}</b>`;
+  if (!giftFree(g)) for (let k = n + 1; k < n + 7; k++){ const h = giftOf(k); if (giftFree(h)){ s += ` · <b>free ${vehById(h.veh).name}</b> in ${k - n + 1} days`; break; } }
+  return s;
+}
+function renderCalendar(){
+  const n = streakToday(), start = n ? n - (n - 1) % 7 : 1;
+  return `<div class="cal">` + Array.from({ length: 7 }, (_, i) => {
+    const d = start + i, g = giftOf(d), cls = d <= n ? 'got' : d === n + 1 ? 'next' : '';
+    const inner = giftFree(g) || (g.veh && d <= n) ?`<img alt="${vehById(g.veh).name}" src="${vehImg(vehById(g.veh))}">` : `${giftCoins(g)}<svg><use href="#i-coin"/></svg>`;
+    return `<div class="${cls}"><span>Day ${i + 1}</span><b>${inner}</b></div>`;
+  }).join('') + `</div>`;
+}
 // the same three jobs for everyone on a given day
 function jobsToday(){
   const k = dayKey();
@@ -495,13 +531,17 @@ function claimStreak(){
   const k = dayKey(); save.streak = save.streak || { last: '', n: 0 };
   if (save.streak.last === k) return;
   const y = dayKey(new Date(Date.now() - 864e5));
-  const n = save.streak.last === y ? save.streak.n + 1 : 1, pay = STREAK_PAY[Math.min(n, 7) - 1], fresh = !save.streak.last && !save.runs;
-  save.streak = { last: k, n }; save.coins += pay; persist();
-  setTimeout(() => popCard(n > 1 ? `Day ${n} streak!` : fresh ? 'Welcome, farmer!' : 'Welcome back, farmer!', `+${pay} coins · come back tomorrow for more`, 'i-fire'), 700);
+  const n = save.streak.last === y ? save.streak.n + 1 : 1, g = giftOf(n), fresh = !save.streak.last && !save.runs;
+  let got;
+  if (giftFree(g)){ save.vehOwned.push(g.veh); got = `Free ${vehById(g.veh).name}! It's in your Garage`; }
+  else { const c = giftCoins(g); save.coins += c; got = `+${c} coins`; }
+  save.streak = { last: k, n }; persist();
+  setTimeout(() => popCard(n > 1 ? `Day ${n} streak!` : fresh ? 'Welcome, farmer!' : 'Welcome back, farmer!', `${got} · come back tomorrow for more`, 'i-fire'), 700);
 }
 function renderJobs(){
-  const list = jobsToday(), n = save.streak && save.streak.last === dayKey() ? save.streak.n : 0;
-  return `<div class="jh"><span>Today's jobs</span>${n ? `<span class="streak"><svg><use href="#i-fire"/></svg>Day ${n} streak</span>` : ''}</div>` + list.map(m => {
+  const list = jobsToday(), n = streakToday();
+  return `<div class="jh"><span>Daily gifts</span>${n ? `<span class="streak"><svg><use href="#i-fire"/></svg>Day ${n} streak</span>` : ''}</div>` + renderCalendar()
+    + `<div class="jh jh2"><span>Today's jobs</span></div>` + list.map(m => {
     const d = jobDef(m.id); if (!d) return '';
     const pct = Math.round(100 * Math.min(1, m.prog / d.goal)), prog = d.goal > 1 && !m.done ? ` <span style="color:#9a8268;font-weight:800">${Math.floor(m.prog).toLocaleString('en-US')}/${d.goal.toLocaleString('en-US')}</span>` : '';
     return `<div class="job${m.done ? ' done' : ''}"><span class="jt">${m.done ? '<svg><use href="#i-check"/></svg>' : ''}${d.text}${prog}</span><span class="jr">${m.done ? 'Done' : '+' + d.reward}<svg><use href="#i-coin"/></svg></span><div class="bar"><i style="width:${pct}%"></i></div></div>`;
@@ -1687,6 +1727,7 @@ function showOver(){
   $('doubleBtn').style.display = G.doubled || G.coins < 5 ? 'none' : 'flex';
   $('shareBtn').style.display = G.daily ? 'flex' : 'none';
   $('oJobs').innerHTML = renderJobsMini();
+  $('oTmrw').innerHTML = `<svg><use href="#i-cal"/></svg><span>${tomorrowLine()}</span>`;
   show('over');
 }
 async function revive(){
@@ -1716,7 +1757,7 @@ async function share(){
 let garageFrom = 'menu';
 const vehImgs = {};
 const vehImg = V => vehImgs[V.id] || (vehImgs[V.id] = vehiclePreview(V));
-addEventListener('world3d', () => { for (const k in vehImgs) delete vehImgs[k]; if ($('garage') && $('garage').classList.contains('on')) renderGarage(); });
+addEventListener('world3d', () => { for (const k in vehImgs) delete vehImgs[k]; if ($('garage') && $('garage').classList.contains('on')) renderGarage(); if (screen === 'menu') refreshMenu(); });
 function renderGarage(){
   $('gCoins').textContent = save.coins;
   const cur = vehicle().id;
