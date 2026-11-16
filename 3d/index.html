@@ -71,7 +71,7 @@
   .oL,.oR{display:contents}
   /* short, wide windows (a laptop's game frame, a phone on its side): results on the left, buttons on the right,
      so "Drive again" is never below the fold */
-  @media (orientation:landscape) and (max-height:700px){
+  @media (orientation:landscape) and (max-height:820px){
     #over .card{max-width:760px;display:grid;grid-template-columns:1.1fr 1fr;gap:0 22px;align-items:center;padding:18px 20px 16px;margin-top:40px}
     #over .oL,#over .oR{display:block;min-width:0}
     #over .oR>.btn:first-child{margin-top:0}
@@ -344,6 +344,11 @@ const Portal = (() => {
   const onPortal = /(^|\.)crazygames\.[a-z.]+$/i.test(location.hostname) || /[?&]cg\b/.test(q);
   const adTest = /[?&]adtest\b/.test(q);
   let sdk = null, siteMuted = false, adPlaying = false, playing = false;
+  // ads can be off for a whole session (Basic Launch, an ad blocker, offline). A rewarded button must then never
+  // look like it works: the game offers the coin price instead. Remembered on this device for 12 hours.
+  const OFF_KEY = 'hh_adsOff';
+  let adsOff = (() => { try { return Date.now() - (+localStorage.getItem(OFF_KEY) || 0) < 12 * 3600e3; } catch(e){ return false; } })();
+  const markAdsOff = () => { adsOff = true; try { localStorage.setItem(OFF_KEY, String(Date.now())); } catch(e){} };
 
   // keep a handle on every AudioContext the game creates, so sound can pause for ads and the site's mute switch
   const contexts = [], applyAudio = () => { for (const c of contexts){ try { (siteMuted || adPlaying) ? c.suspend() : c.resume(); } catch(e){} } };
@@ -363,10 +368,12 @@ const Portal = (() => {
         const onSettings = st => { siteMuted = !!(st && st.muteAudio); applyAudio(); };
         onSettings(sdk.game.settings); sdk.game.addSettingsChangeListener(onSettings);
         if (playing) sdk.game.gameplayStart();
+        try { Promise.resolve(sdk.ad.hasAdblock()).then(b => { if (b) markAdsOff(); }).catch(() => {}); } catch(e){}
       } catch(e){ sdk = null; }
+      if (!sdk) adsOff = true;
       done();
     };
-    s.onerror = () => done();          // an ad blocker can stop the SDK loading; the game still has to work
+    s.onerror = () => { adsOff = true; done(); };          // an ad blocker can stop the SDK loading; the game still has to work
     document.head.appendChild(s);
   });
 
@@ -418,13 +425,18 @@ const Portal = (() => {
         sdk.ad.requestAd(type === 'rewarded' ? 'rewarded' : 'midgame', {
           adStarted(){ adPlaying = true; applyAudio(); },
           adFinished(){ done(true); },
-          adError(){ done(false); },       // never reward a failed ad
+          adError(err){                    // never reward a failed ad
+            const code = err && err.code;
+            if (code === 'adsDisabled' || code === 'adsDisabledBasicLaunch' || code === 'adblock') markAdsOff();
+            done(false);
+          },
         });
       } catch(e){ done(false); }
     });
   }
   return {
     onPortal,
+    adsOff: () => onPortal && adsOff && !adTest,
     rewarded: () => requestAd('rewarded'),
     interstitial: () => requestAd('midgame'),
     gameplayStart, gameplayStop, loadSave, writeSave,
@@ -1013,7 +1025,8 @@ function update(dt){
   if (G.waiting && (input.gas || input.brake)){ G.waiting = false; Sound.init(); }
   G.t += dt;
   const S = G.S, c = G.c;
-  const sub = 8, h = dt / sub;
+  // a fixed physics step: the truck, the jumps and the flying hens behave the same at 60, 144 or 165 Hz
+  const h = 1 / 480; G.acc = (G.acc || 0) + dt; let sub = Math.min(Math.floor(G.acc / h), 40); G.acc = Math.max(0, G.acc - sub * h);
   for (let k = 0; k < sub; k++){ stepPhysics(h); stepHens(h); }
   if (![c.x, c.y, c.vx, c.vy, c.a, c.w].every(Number.isFinite)) { crash('The truck fell apart'); return; }
 
@@ -1805,7 +1818,17 @@ function drawOverlay(camX, camY, sx, sy, inWorld){
 function show(id){
   for (const s of ['menu', 'over', 'garage', 'paused']) $(s).classList.toggle('on', s === id);
   $('pauseBtn').style.display = id === null ? 'grid' : 'none';
+  if (id === 'over') fitOver();
 }
+// the results card must fit the frame whole, whatever its size: on a phone with browser bars or a short
+// laptop frame, shrink it rather than push "Drive again", Garage and Menu below the bottom edge
+function fitOver(){
+  const card = document.querySelector('#over .card'); if (!card) return;
+  card.style.zoom = 1;
+  const top = parseFloat(getComputedStyle(card).marginTop) || 0, room = innerHeight - 24 - top, h = card.offsetHeight;
+  card.style.zoom = h > room ? Math.max(.62, room / h).toFixed(3) : 1;
+}
+addEventListener('resize', () => { if ($('over').classList.contains('on')) fitOver(); });
 function refreshMenu(){
   $('mBest').textContent = save.best + ' m'; $('mCoins').textContent = save.coins; $('mHens').textContent = save.bestHens;
   const d = save.daily[dayKey()];
@@ -1830,17 +1853,30 @@ function showOver(){
   $('oTitle').textContent = G.reason || 'Crashed!';
   $('oDist').textContent = m + ' m'; $('oBest').textContent = best ? 'New best!' : 'Best ' + save.best + ' m';
   $('oHens').textContent = G.delivered; $('oFlips').textContent = G.flips; $('oCoins').textContent = G.coins; $('oSaves').textContent = G.saves; $('oEggs').textContent = G.eggsSold;
-  $('reviveBtn').style.display = G.revived || G.parked || G.reason === 'Out of fuel' ? 'none' : 'flex';
-  $('doubleBtn').style.display = G.doubled || G.coins < 5 ? 'none' : 'flex';
+  adButtons();
   $('shareBtn').style.display = G.daily ? 'flex' : 'none';
   $('oJobs').innerHTML = renderJobsMini();
   $('oTmrw').innerHTML = `<svg><use href="#i-cal"/></svg><span>${tomorrowLine()}</span>`;
   $('oGoal').innerHTML = renderGoal();
   show('over');
 }
+// the results screen's reward buttons. When ads are off (Basic Launch, an ad blocker) a rewarded button
+// must never sit there doing nothing: the revive costs coins instead, and "double your coins" is not offered.
+const REVIVE_COST = 25;
+function adButtons(){
+  const off = Portal.adsOff(), canRevive = !(G.revived || G.parked || G.reason === 'Out of fuel') && (!off || save.coins >= REVIVE_COST);
+  $('reviveBtn').style.display = canRevive ? 'flex' : 'none';
+  $('reviveBtn').querySelector('small').textContent = off ? `Pay ${REVIVE_COST} coins · keep your chickens` : 'Watch a short ad · keep your chickens';
+  $('doubleBtn').style.display = off || G.doubled || G.coins < 5 ? 'none' : 'flex';
+}
+function adMissed(){
+  if (Portal.adsOff()){ adButtons(); fitOver(); toast('Ads are off right now'); }
+  else toast('No ad available right now');
+}
 async function revive(){
   if (!G || G.revived || !G.crashed) return;
-  if (!(await Portal.rewarded())) return;
+  if (Portal.adsOff()){ if (save.coins < REVIVE_COST) return; save.coins -= REVIVE_COST; persist(); }
+  else if (!(await Portal.rewarded())){ adMissed(); return; }
   G.revived = true; G.crashed = false; G.over = false; G.reason = '';
   const c = G.c, x = c.x, y = groundY(x) - 45;
   Object.assign(c, { x, y, a: Math.atan2(groundY(x + 20) - groundY(x - 20), 40), vx: 0, vy: 0, w: 0 });
@@ -1851,8 +1887,8 @@ async function revive(){
   screen = 'play'; show(null); last = performance.now(); Portal.gameplayStart();
 }
 async function doubleCoins(){
-  if (!G || G.doubled) return;
-  if (!(await Portal.rewarded())) return;
+  if (!G || G.doubled || Portal.adsOff()) return;
+  if (!(await Portal.rewarded())){ adMissed(); return; }
   G.doubled = true; save.coins += G.coins; persist(); $('oCoins').textContent = G.coins * 2; $('doubleBtn').style.display = 'none'; toast('Coins doubled!');
 }
 async function share(){
