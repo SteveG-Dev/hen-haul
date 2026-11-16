@@ -68,6 +68,27 @@
   .best{color:var(--red);font-weight:900;font-size:17px;min-height:20px}
   .peek{position:absolute;left:50%;top:-46px;width:64px;height:64px;transform:translateX(-50%)}
   #over .card{margin-top:46px}
+  .oL,.oR{display:contents}
+  /* short, wide windows (a laptop's game frame, a phone on its side): results on the left, buttons on the right,
+     so "Drive again" is never below the fold */
+  @media (orientation:landscape) and (max-height:700px){
+    #over .card{max-width:760px;display:grid;grid-template-columns:1.1fr 1fr;gap:0 22px;align-items:center;padding:18px 20px 16px;margin-top:40px}
+    #over .oL,#over .oR{display:block;min-width:0}
+    #over .oR>.btn:first-child{margin-top:0}
+    #over .big{font-size:46px}
+    #over .stats{margin-top:10px}
+    #over .tmrw{margin-top:10px}
+    #over .jobsMini{margin-top:8px}
+  }
+  @media (orientation:landscape) and (max-height:430px){
+    #over .card{padding:12px 16px 12px;margin-top:30px}
+    #over .peek{width:48px;height:48px;top:-34px}
+    #over .big{font-size:36px}
+    #over .stats .ic{width:22px;height:22px}
+    #over .stats b{font-size:18px}
+    #over .jobsMini{display:none}
+    #over .btn{margin-top:7px;padding:9px 12px;font-size:16px}
+  }
   .keys{display:flex;justify-content:center;flex-wrap:wrap;gap:6px 14px;margin-top:14px;color:#5a4232;font-size:13px;font-weight:700}
   .keys span{display:inline-flex;align-items:center;gap:5px}
   .keys svg{width:17px;height:17px}
@@ -128,6 +149,30 @@
   .tmrw{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;padding:8px 12px;border-radius:14px;background:#fff6d6;border:2px solid #ffc327;font-size:13.5px;font-weight:700;color:#5a3a12;text-align:left;line-height:1.3}
   .tmrw b{font-weight:900;color:#2b1a0e}
   .tmrw svg{width:20px;height:20px;flex:none;color:#b86e00}
+  .inc{display:flex;align-items:center;gap:8px;margin:2px 0 6px;padding:6px 10px;border-radius:12px;background:#fff6d6;border:2px dashed #ffc327;font-size:13px;font-weight:700;color:#5a3a12;line-height:1.25}
+  .inc b{font-weight:900;color:#2b1a0e}
+  .inc svg{width:20px;height:20px;flex:none}
+  .goal{margin-top:10px;text-align:left}
+  .goal:empty{display:none}
+  .goal .gt{display:flex;align-items:center;gap:6px;font-size:13.5px;font-weight:700;color:#5a4232}
+  .goal .gt b{font-weight:900;color:#2b1a0e}
+  .goal .gt>svg{width:18px;height:18px;flex:none;color:#2f8f45}
+  .goal .gc{margin-left:auto;display:inline-flex;align-items:center;gap:3px;font-weight:900;color:#b86e00;white-space:nowrap}
+  .goal .gc svg{width:14px;height:14px}
+  .goal .bar{display:block;height:8px;margin-top:4px;border-radius:4px;background:#efe3cc;overflow:hidden}
+  .goal .bar i{display:block;height:100%;background:linear-gradient(90deg,#ffd34d,#f5a10f);border-radius:4px}
+  .breeds{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:8px}
+  .br{padding:6px 4px 8px;border-radius:14px;background:linear-gradient(180deg,#fffaf0,#f8ead2);border:2px solid #fff;box-shadow:0 4px 0 rgba(0,0,0,.3);text-align:center;color:#2b1a0e}
+  .br img{width:100%;max-width:72px;height:auto;display:block;margin:0 auto}
+  .br b{display:block;font-size:12px;font-weight:900;line-height:1.15;margin-top:2px}
+  .br.no img{filter:brightness(0);opacity:.22}
+  .br.no b{color:#8c7b66}
+  .bnote{color:#f5e6cf;font-size:13px;font-weight:600;margin-top:10px;line-height:1.35}
+  #hatch{z-index:6;background:rgba(70,35,10,.35);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+  #hatch img{width:150px;height:auto;display:block;margin:6px auto 0;animation:hatchPop .6s cubic-bezier(.2,1.6,.4,1)}
+  #hatch h2{margin-top:2px}
+  #hatch .tag{margin:8px 0 6px}
+  @keyframes hatchPop{0%{transform:scale(.2) rotate(-20deg);opacity:0}100%{transform:none;opacity:1}}
   .jobsMini{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:12px}
   .jobsMini span{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:999px;background:#fff;border:2px solid var(--line);font-size:12.5px;font-weight:800;color:#5a4232}
   .jobsMini span.done{background:#e6f8ea;border-color:#9ee0ac;color:#1f7a35}
@@ -225,6 +270,7 @@
 
 <div id="over" class="screen"><div class="card">
   <svg class="peek"><use href="#i-hen"/></svg>
+  <div class="oL">
   <div class="sub" id="oTitle">Crashed!</div>
   <div class="big" id="oDist">0 m</div>
   <div class="best" id="oBest"></div>
@@ -236,12 +282,16 @@
     <div><svg class="ic"><use href="#i-coin"/></svg><b id="oCoins">0</b>coins</div>
   </div>
   <div class="tmrw" id="oTmrw"></div>
+  <div class="goal" id="oGoal"></div>
   <div class="jobsMini" id="oJobs"></div>
+  </div>
+  <div class="oR">
   <button class="btn ad" id="reviveBtn"><svg><use href="#i-play"/></svg><span class="tx">Back on your wheels<small>Watch a short ad · keep your chickens</small></span></button>
   <button class="btn adgold" id="doubleBtn"><svg><use href="#i-coin"/></svg><span class="tx">Double your coins<small>Watch a short ad</small></span></button>
   <button class="btn red" id="againBtn"><svg><use href="#i-again"/></svg>Drive again</button>
   <button class="btn" id="shareBtn"><svg><use href="#i-share"/></svg>Share</button>
   <div class="row"><button class="btn" id="oGarageBtn"><svg><use href="#i-home"/></svg>Garage</button><button class="btn" id="oMenuBtn"><svg><use href="#i-list"/></svg>Menu</button></div>
+  </div>
 </div></div>
 
 <div id="garage" class="screen">
@@ -253,6 +303,9 @@
     <div class="vehicles" id="vehList"></div>
     <div class="sect">Upgrades</div>
     <div class="shop" id="shop"></div>
+    <div class="sect">Chicken breeds <span id="gBreedN"></span></div>
+    <div class="breeds" id="breedList"></div>
+    <p class="bnote" id="gBreedNote"></p>
     <button class="btn" id="gBackBtn"><svg><use href="#i-back"/></svg>Back</button>
   </div>
 </div>
@@ -261,6 +314,14 @@
   <h2>Paused</h2>
   <button class="btn red" id="resumeBtn"><svg><use href="#i-play"/></svg>Keep driving</button>
   <button class="btn" id="quitBtn"><svg><use href="#i-stop"/></svg>End the run</button>
+</div></div>
+
+<div id="hatch" class="screen"><div class="card">
+  <div class="sub">Your egg hatched!</div>
+  <img id="hImg" alt="">
+  <h2 id="hName"></h2>
+  <p class="tag" id="hSub"></p>
+  <button class="btn gold" id="hOk">Let's drive</button>
 </div></div>
 
 <div id="ad"><div class="t">AD PLACEHOLDER</div><div class="n" id="adN">3</div><div class="t">A portal ad (CrazyGames / Poki) plays here</div></div>
@@ -402,6 +463,9 @@ function repairSave(){
   if (save.tips != null && !obj(save.tips)) save.tips = null;
   if (typeof save.veh !== 'string') save.veh = 'pickup';
   save.vehOwned = Array.isArray(save.vehOwned) ? save.vehOwned : ['pickup'];
+  save.breeds = Array.isArray(save.breeds) ? save.breeds.filter(id => typeof id === 'string') : [];
+  if (!save.breeds.includes('white')) save.breeds.unshift('white');
+  if (save.incubator != null && !(obj(save.incubator) && typeof save.incubator.laid === 'string' && typeof save.incubator.breed === 'string')) save.incubator = null;
   // one-time tips already shown; anyone who has finished a run before counts as having seen them
   save.tips = save.tips || (save.runs > 0 ? { tilt: 1, stand: 1 } : {});
 }
@@ -449,6 +513,43 @@ const VEHICLES = [
 ];
 const vehicle = () => VEHICLES.find(v => v.id === save.veh && save.vehOwned.includes(v.id)) || VEHICLES[0];
 
+/* ================= Chicken breeds: the first run each day finds an egg, and it hatches the next day ================= */
+// body and wing/tail colours; every breed after the first adds 5% to what deliveries pay
+const BREEDS = [
+  { id: 'white',   name: 'Farm White',   body: '#fbf7ee', wing: '#eee2cc' },
+  { id: 'brown',   name: 'Brown Hen',    body: '#b8743c', wing: '#8a4f22' },
+  { id: 'ginger',  name: 'Ginger Hen',   body: '#ec9442', wing: '#c0661f' },
+  { id: 'speckle', name: 'Speckled Hen', body: '#d6d0c6', wing: '#7e7870' },
+  { id: 'black',   name: 'Black Hen',    body: '#3d3635', wing: '#5c524e' },
+  { id: 'blue',    name: 'Blue Hen',     body: '#8ea4c8', wing: '#5f7399' },
+  { id: 'silver',  name: 'Silver Hen',   body: '#eef1f5', wing: '#8f99a6' },
+  { id: 'golden',  name: 'Golden Hen',   body: '#ffd24a', wing: '#e2a10f' },
+];
+const BREED_BONUS = .05;
+const breedOf = id => BREEDS.find(b => b.id === id) || BREEDS[0];
+const breedBonus = () => BREED_BONUS * Math.max(0, save.breeds.length - 1);
+const nextBreed = () => BREEDS.find(b => !save.breeds.includes(b.id));
+const pickBreed = () => save.breeds[Math.floor(Math.random() * save.breeds.length)] || 'white';
+const eggToday = () => !!save.incubator && save.incubator.laid === dayKey();
+// on opening the game: an egg found on an earlier day hatches
+function hatchEgg(){
+  const inc = save.incubator; if (!inc || inc.laid === dayKey()) return null;
+  const b = breedOf(inc.breed); save.incubator = null;
+  if (!save.breeds.includes(b.id)) save.breeds.push(b.id);
+  persist(); return b;
+}
+// the first finished run of a day finds an egg, while there is still a breed to find
+function layEgg(){
+  if (save.incubator || save.eggDay === dayKey()) return false;
+  const b = nextBreed(); if (!b) return false;
+  save.incubator = { laid: dayKey(), breed: b.id }; save.eggDay = dayKey(); persist(); return true;
+}
+// time left until midnight, when today's egg can hatch
+function untilMidnight(){
+  const t = new Date(); t.setHours(24, 0, 0, 0); const m = Math.max(1, Math.ceil((t - Date.now()) / 6e4));
+  return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
+}
+
 /* ================= Today's jobs (daily missions) and the login streak ================= */
 // kind 'add' counts up over the day; 'max' keeps the best single-run value
 const JOBS = [
@@ -468,7 +569,8 @@ const JOBS = [
 ];
 // the daily gift calendar: something every day you come back, a free truck on days 3 and 7 (its price in coins if you already own it);
 // missing a day starts the week again
-const STREAK_GIFTS = [{ coins: 20 }, { coins: 40 }, { veh: 'tractor' }, { coins: 60 }, { coins: 80 }, { coins: 100 }, { veh: 'monster' }];
+// the Tractor is on day 2 on purpose: the first thing a new player is promised is worth coming back for tomorrow
+const STREAK_GIFTS = [{ coins: 20 }, { veh: 'tractor' }, { coins: 40 }, { coins: 60 }, { coins: 80 }, { coins: 100 }, { veh: 'monster' }];
 const giftOf = n => STREAK_GIFTS[(n - 1) % 7];
 const vehById = id => VEHICLES.find(v => v.id === id);
 const giftFree = g => g.veh && !save.vehOwned.includes(g.veh);
@@ -478,8 +580,8 @@ const streakToday = () => save.streak && save.streak.last === dayKey() ? save.st
 // what the end-of-run screen promises for tomorrow, plus the next free truck if tomorrow is only coins
 function tomorrowLine(){
   const n = streakToday() + 1, g = giftOf(n);
-  let s = `Come back tomorrow for <b>${giftText(g)}</b>`;
-  if (!giftFree(g)) for (let k = n + 1; k < n + 7; k++){ const h = giftOf(k); if (giftFree(h)){ s += ` · <b>free ${vehById(h.veh).name}</b> in ${k - n + 1} days`; break; } }
+  let s = eggToday() ? `Come back tomorrow: <b>your egg hatches</b> + <b>${giftText(g)}</b>` : `Come back tomorrow for <b>${giftText(g)}</b>`;
+  if (!giftFree(g) && !eggToday()) for (let k = n + 1; k < n + 7; k++){ const h = giftOf(k); if (giftFree(h)){ s += ` · <b>free ${vehById(h.veh).name}</b> in ${k - n + 1} days`; break; } }
   return s;
 }
 function renderCalendar(){
@@ -540,7 +642,9 @@ function claimStreak(){
 }
 function renderJobs(){
   const list = jobsToday(), n = streakToday();
-  return `<div class="jh"><span>Daily gifts</span>${n ? `<span class="streak"><svg><use href="#i-fire"/></svg>Day ${n} streak</span>` : ''}</div>` + renderCalendar()
+  const egg = eggToday() ? `<div class="inc"><svg><use href="#i-egg"/></svg><span>Your egg hatches in <b>${untilMidnight()}</b>: a new breed for your coop</span></div>`
+    : nextBreed() ? `<div class="inc"><svg><use href="#i-egg"/></svg><span>Finish a run to find <b>today's egg</b></span></div>` : '';
+  return `<div class="jh"><span>Daily gifts</span>${n ? `<span class="streak"><svg><use href="#i-fire"/></svg>Day ${n} streak</span>` : ''}</div>` + renderCalendar() + egg
     + `<div class="jh jh2"><span>Today's jobs</span></div>` + list.map(m => {
     const d = jobDef(m.id); if (!d) return '';
     const pct = Math.round(100 * Math.min(1, m.prog / d.goal)), prog = d.goal > 1 && !m.done ? ` <span style="color:#9a8268;font-weight:800">${Math.floor(m.prog).toLocaleString('en-US')}/${d.goal.toLocaleString('en-US')}</span>` : '';
@@ -781,7 +885,7 @@ function loadHens(){
   for (let k = 0; k < n; k++){
     const lx = BED.x0 + HEN_R + 2 + (k % 4) * (HEN_R * 2 + 1.5), ly = BED.floor - HEN_R - .5 - Math.floor(k / 4) * (HEN_R * 2 + .5);
     const p = toWorld(lx, ly), v = pointVel(p.x, p.y);
-    G.hens.push({ x: p.x, y: p.y, px: p.x - v.x / 480, py: p.y - v.y / 480, aboard: true, loose: false, face: 1, flap: 0, id: Math.random() });
+    G.hens.push({ x: p.x, y: p.y, px: p.x - v.x / 480, py: p.y - v.y / 480, aboard: true, loose: false, face: 1, flap: 0, id: Math.random(), breed: pickBreed() });
   }
 }
 
@@ -987,14 +1091,14 @@ function update(dt){
     if (s.done || c.x < s.x) continue;
     s.done = true;
     const aboardNow = G.hens.filter(e => e.aboard), n = aboardNow.length;
-    const eggs = G.eggs, pay = n * (10 + s.idx * 3) + eggs * (6 + s.idx * 2);
+    const eggs = G.eggs, pay = Math.round((n * (10 + s.idx * 3) + eggs * (6 + s.idx * 2)) * (1 + breedBonus()));
     G.delivered += n; G.coins += pay; G.fuel = S.tank; G.eggsSold += eggs; G.eggs = 0; G.eggT = 0;
     job('stand'); if (n) job('deliver', n); if (n && n >= G.S.cap) job('fullLoad'); if (eggs) job('eggs', eggs);
     G.banner = { text: n || eggs ? `${n ? n + ' 🐔 ' : ''}${eggs ? eggs + ' 🥚 ' : ''}DELIVERED  +${pay}` : 'NO CHICKENS LEFT!', life: 2, max: 2 };
     Sound.deliver(n);
     // the chickens hop off onto the counter, and the pay flies up to your coin counter
     const gy = groundY(s.x);
-    aboardNow.forEach((e, k) => G.hoppers.push({ x0: e.x, y0: e.y, x1: s.x + 10 + k * 14, y1: gy - 52 - HEN_R, t: -k * .07, dur: .55, id: e.id }));
+    aboardNow.forEach((e, k) => G.hoppers.push({ x0: e.x, y0: e.y, x1: s.x + 10 + k * 14, y1: gy - 52 - HEN_R, t: -k * .07, dur: .55, id: e.id, breed: e.breed }));
     const nc = Math.min(14, Math.ceil(pay / 6));
     for (let k = 0; k < nc; k++){ const p = toScreen(c.x, c.y - 30); G.flyCoins.push({ x: p.x, y: p.y, vx: (Math.random() - .5) * 260, vy: -160 - Math.random() * 180, t: -k * .05 }); }
     if (n) buzz(30);
@@ -1274,12 +1378,13 @@ function drawMenuFront(camX){
 function drawHen(e, t){
   ctx.save(); ctx.translate(e.x, e.y);
   const tilt = e.aboard ? 0 : Math.sin(t * 9 + e.id * 10) * .5; ctx.rotate(tilt);
-  ctx.fillStyle = '#f3e9d9'; ctx.beginPath(); ctx.moveTo(-HEN_R * .8, -1); ctx.lineTo(-HEN_R * 1.5, -HEN_R * .9); ctx.lineTo(-HEN_R * 1.1, 1); ctx.fill();   // tail
-  const b = ctx.createRadialGradient(-1, -2, 1, 0, 0, HEN_R * 1.2); b.addColorStop(0, '#fff'); b.addColorStop(1, '#eadfcd');
+  const br = e.breed && e.breed !== 'white' ? breedOf(e.breed) : null;
+  ctx.fillStyle = br ? br.wing : '#f3e9d9'; ctx.beginPath(); ctx.moveTo(-HEN_R * .8, -1); ctx.lineTo(-HEN_R * 1.5, -HEN_R * .9); ctx.lineTo(-HEN_R * 1.1, 1); ctx.fill();   // tail
+  const b = ctx.createRadialGradient(-1, -2, 1, 0, 0, HEN_R * 1.2); b.addColorStop(0, br ? br.body : '#fff'); b.addColorStop(1, br ? br.wing : '#eadfcd');
   ctx.fillStyle = b; ctx.beginPath(); ctx.ellipse(0, 0, HEN_R * 1.1, HEN_R, 0, 0, TAU); ctx.fill();
   ctx.strokeStyle = 'rgba(90,60,30,.25)'; ctx.lineWidth = .8; ctx.stroke();
   const fl = e.flap ? Math.sin(e.flap) * .9 : 0;
-  ctx.fillStyle = '#efe3cf'; ctx.beginPath(); ctx.ellipse(-2, 1, 5, 3.4, -.3 - fl, 0, TAU); ctx.fill();
+  ctx.fillStyle = br ? br.wing : '#efe3cf'; ctx.beginPath(); ctx.ellipse(-2, 1, 5, 3.4, -.3 - fl, 0, TAU); ctx.fill();
   ctx.fillStyle = '#e8382c'; ctx.beginPath(); ctx.arc(3.5, -HEN_R + .8, 2.3, 0, TAU); ctx.arc(5.8, -HEN_R + .3, 2.1, 0, TAU); ctx.arc(7.6, -HEN_R + 1.5, 1.7, 0, TAU); ctx.fill();
   ctx.beginPath(); ctx.arc(HEN_R + .5, 2, 1.4, 0, TAU); ctx.fill();
   ctx.fillStyle = '#f5a10f'; ctx.beginPath(); ctx.moveTo(HEN_R + .5, -2.2); ctx.lineTo(HEN_R + 5, -.3); ctx.lineTo(HEN_R + .5, 1.2); ctx.fill();
@@ -1510,7 +1615,7 @@ function drawTruckAndCargo(P){
   for (const h of G.hoppers){
     if (h.t < 0) continue;
     const k = Math.min(1, h.t / h.dur), x = h.x0 + (h.x1 - h.x0) * k, y = h.y0 + (h.y1 - h.y0) * k - Math.sin(k * Math.PI) * 46;
-    ctx.globalAlpha = clamp(h.dur + 1.6 - h.t, 0, 1); drawHen({ x, y, aboard: k >= 1, loose: false, flap: k < 1 ? h.t * 30 : 0, id: h.id }, G.t); ctx.globalAlpha = 1;
+    ctx.globalAlpha = clamp(h.dur + 1.6 - h.t, 0, 1); drawHen({ x, y, aboard: k >= 1, loose: false, flap: k < 1 ? h.t * 30 : 0, id: h.id, breed: h.breed }, G.t); ctx.globalAlpha = 1;
   }
 }
 function draw(){
@@ -1719,6 +1824,8 @@ function showOver(){
   if (firstEnd && drove) save.runs++;
   if (G.daily){ const k = dayKey(), p = save.daily[k]; if (!p || m > p.m) save.daily[k] = { m, hens: G.delivered, flips: G.flips }; }
   job('runCoins', G.coins); if (firstEnd && drove) job('run');
+  // today's egg: found at the end of the first real run of the day, hatches tomorrow
+  if (drove && layEgg()) setTimeout(() => popCard('You found an egg!', 'It hatches tomorrow into a new chicken breed', 'i-egg'), 350);
   persist();
   $('oTitle').textContent = G.reason || 'Crashed!';
   $('oDist').textContent = m + ' m'; $('oBest').textContent = best ? 'New best!' : 'Best ' + save.best + ' m';
@@ -1728,6 +1835,7 @@ function showOver(){
   $('shareBtn').style.display = G.daily ? 'flex' : 'none';
   $('oJobs').innerHTML = renderJobsMini();
   $('oTmrw').innerHTML = `<svg><use href="#i-cal"/></svg><span>${tomorrowLine()}</span>`;
+  $('oGoal').innerHTML = renderGoal();
   show('over');
 }
 async function revive(){
@@ -1755,9 +1863,43 @@ async function share(){
   try { await navigator.clipboard.writeText(text); toast('Copied. Paste it anywhere'); } catch(e){ prompt('Copy your result:', text); }
 }
 let garageFrom = 'menu';
+// a breed's picture for the Garage and the hatch card: the game's own 2D chicken, drawn large
+const breedImgs = {};
+function breedImg(id){
+  if (breedImgs[id]) return breedImgs[id];
+  if (window.World3D && World3D.henPreview){ try { return breedImgs[id] = World3D.henPreview(id); } catch(e){} }
+  const c = document.createElement('canvas'); c.width = 132; c.height = 112;
+  const main = ctx; ctx = c.getContext('2d'); ctx.setTransform(4.4, 0, 0, 4.4, 60, 60);
+  try { drawHen({ x: 0, y: 0, aboard: false, loose: true, flap: 0, id: 0, breed: id }, 0); } finally { ctx = main; }
+  return breedImgs[id] = c.toDataURL();
+}
+function showHatch(b){
+  $('hImg').src = breedImg(b.id); $('hName').textContent = b.name;
+  const left = BREEDS.length - save.breeds.length;
+  $('hSub').innerHTML = `joined your coop. Deliveries now pay <b>+${Math.round(breedBonus() * 100)}%</b>.<br>` +
+    (left ? `${left} more breed${left > 1 ? 's' : ''} to find. Finish a run today for another egg.` : 'You found every breed!');
+  $('hatch').classList.add('on'); Sound.deliver(3); buzz([30, 60, 40]);
+}
+$('hOk').onclick = () => $('hatch').classList.remove('on');
+// the cheapest thing in the Garage you can't buy yet: the end screen shows how close you are
+function nextGoal(){
+  const list = [];
+  for (const u of UPGRADES) if (up(u.id) < u.max) list.push({ name: `${u.name} level ${up(u.id) + 1}`, cost: upCost(u) });
+  for (const V of VEHICLES) if (!save.vehOwned.includes(V.id)) list.push({ name: 'the ' + V.name, cost: V.cost });
+  if (!list.length) return null;
+  list.sort((a, b) => a.cost - b.cost);
+  const ready = list.filter(g => g.cost <= save.coins).length;
+  return ready ? { ready } : { ...list[0], ready: 0 };
+}
+function renderGoal(){
+  const g = nextGoal(); if (!g) return '';
+  if (g.ready) return `<span class="gt"><svg><use href="#i-wrench"/></svg>You can afford ${g.ready === 1 ? 'an upgrade' : g.ready + ' upgrades'} in the Garage!</span>`;
+  const pct = Math.round(100 * save.coins / g.cost);
+  return `<span class="gt">Next: <b>${g.name}</b><span class="gc">${save.coins} / ${g.cost}<svg><use href="#i-coin"/></svg></span></span><span class="bar"><i style="width:${pct}%"></i></span>`;
+}
 const vehImgs = {};
 const vehImg = V => vehImgs[V.id] || (vehImgs[V.id] = vehiclePreview(V));
-addEventListener('world3d', () => { for (const k in vehImgs) delete vehImgs[k]; if ($('garage') && $('garage').classList.contains('on')) renderGarage(); if (screen === 'menu') refreshMenu(); });
+addEventListener('world3d', () => { for (const k in vehImgs) delete vehImgs[k]; for (const k in breedImgs) delete breedImgs[k]; if ($('hatch').classList.contains('on')) $('hImg').src = breedImg(save.breeds[save.breeds.length - 1]); if ($('garage') && $('garage').classList.contains('on')) renderGarage(); if (screen === 'menu') refreshMenu(); });
 function renderGarage(){
   $('gCoins').textContent = save.coins;
   const cur = vehicle().id;
@@ -1769,6 +1911,13 @@ function renderGarage(){
     const L = up(u.id), maxed = L >= u.max, c = upCost(u);
     return `<div class="item"><svg class="ic"><use href="#u-${u.id}"/></svg><span class="t"><b>${u.name}</b><small>${u.desc}</small><span class="pips">${Array.from({ length: u.max }, (_, k) => `<i class="${k < L ? 'on' : ''}"></i>`).join('')}</span></span><button data-u="${u.id}" ${maxed || save.coins < c ? 'disabled' : ''}>${maxed ? 'Max' : c + '<svg><use href="#i-coin"/></svg>'}</button></div>`;
   }).join('');
+  $('gBreedN').textContent = `${save.breeds.length}/${BREEDS.length}`;
+  $('breedList').innerHTML = BREEDS.map(b => {
+    const own = save.breeds.includes(b.id), hatching = save.incubator && save.incubator.breed === b.id;
+    return `<div class="br${own ? '' : ' no'}"><img alt="" src="${breedImg(b.id)}"><b>${own ? b.name : hatching ? 'Hatching…' : '?'}</b></div>`;
+  }).join('');
+  $('gBreedNote').textContent = `Every breed you find adds 5% to what deliveries pay (now +${Math.round(breedBonus() * 100)}%). `
+    + (save.breeds.length >= BREEDS.length ? 'You have them all!' : eggToday() ? 'Your egg hatches tomorrow.' : 'Finish a run to find today\'s egg; it hatches tomorrow.');
 }
 function toMenu(){ G = null; screen = 'menu'; paused = false; Sound.engine(false); refreshMenu(); show('menu'); Portal.gameplayStop(); }
 function pause(){ if (screen !== 'play' || !G || G.crashed) return; paused = true; screen = 'paused'; show('paused'); Sound.engine(false); Portal.gameplayStop(); }
@@ -1777,7 +1926,14 @@ function resume(){ paused = false; screen = 'play'; show(null); last = performan
 /* ================= Input ================= */
 const keys = {};
 function syncKeys(){ input.gas = keys.ArrowRight || keys.KeyD || keys.ArrowUp || keys.KeyW ? 1 : 0; input.brake = keys.ArrowLeft || keys.KeyA || keys.ArrowDown || keys.KeyS ? 1 : 0; }
-addEventListener('keydown', e => { keys[e.code] = true; if (screen === 'play') Sound.init(); if (!touches.size) syncKeys(); if (e.code === 'Escape' || e.code === 'KeyP') screen === 'paused' ? resume() : pause(); if (e.code.startsWith('Arrow') || e.code === 'Space') e.preventDefault(); });
+// the menu's egg countdown ticks while the menu is open
+setInterval(() => { if (screen === 'menu' && !document.hidden) refreshMenu(); }, 60000);
+addEventListener('keydown', e => {
+  // the hatch card takes the first key press, so driving keys don't start the truck behind it
+  if ($('hatch').classList.contains('on')){ if (/^(Space|Enter|Escape|Arrow|Key[WASD])/.test(e.code)){ e.preventDefault(); $('hatch').classList.remove('on'); } return; }
+  keys[e.code] = true; if (screen === 'play') Sound.init(); if (!touches.size) syncKeys(); if (e.code === 'Escape' || e.code === 'KeyP') screen === 'paused' ? resume() : pause();
+  // Space or Enter on the results screen drives again, so a keyboard player never has to find the mouse
+  if (screen === 'over' && !e.repeat && (e.code === 'Space' || e.code === 'Enter') && !$('ad').classList.contains('on')){ e.preventDefault(); $('againBtn').click(); return; } if (e.code.startsWith('Arrow') || e.code === 'Space') e.preventDefault(); });
 addEventListener('keyup', e => { keys[e.code] = false; if (!touches.size) syncKeys(); });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; touches.clear(); input.gas = input.brake = 0; });
 const touches = new Map();
@@ -1841,7 +1997,7 @@ addEventListener('pagehide', persist);
 function boot(){
   refreshMenu();
   // first open of the day pays the login streak (not in the capture tools)
-  if (!/[?&](debug|cover)(&|=|$)/.test(location.search)){ claimStreak(); refreshMenu(); }
+  if (!/[?&](debug|cover)(&|=|$)/.test(location.search)){ claimStreak(); const b = hatchEgg(); refreshMenu(); if (b) showHatch(b); }
   // land straight in the game: the truck waits at the start until the first gas or brake.
   // ?menu opens on the menu; ?debug and ?cover keep the menu too, for the capture tools.
   // Sound starts on that first input (browsers block audio before a tap or key press).
@@ -1858,6 +2014,7 @@ else {
 if (/[?&]debug\b/.test(location.search)) window.__hh = {
   get G(){ return G; }, get T(){ return T; }, input, newRun, update, draw, moveCamera, get scale(){ return scale; }, groundY, groundNormal, toLocal, toWorld, EGG_MAX, save, stats, show,
   Sound, VEHICLES, ZONES, zoneIdx, job, jobsToday, claimStreak, renderGarage, refreshMenu, popCard,
+  BREEDS, hatchEgg, layEgg, showOver, showHatch, breedBonus, nextGoal, tomorrowLine, startRun,
   setVehicle(id){ if (!save.vehOwned.includes(id)) save.vehOwned.push(id); save.veh = id; },
   // jump the truck to a distance (for testing and screenshots)
   warp(m){
@@ -1869,7 +2026,7 @@ if (/[?&]debug\b/.test(location.search)) window.__hh = {
   },
   get screen(){ return screen; }, set screen(v){ screen = v; }, setView(w, h){ VW = w; VH = h; scale = fitScale(); },
 };
-window.HH3D = { vehicle, EGG_MAX, toLocal, get G(){ return G; }, get T(){ return T; }, groundY, palAt, ZONES, zoneIdx, BED, toWorld, get MOUNTS(){ return MOUNTS; }, PX_PER_M, skyImage,
+window.HH3D = { vehicle, VEHICLES, EGG_MAX, breedOf, get breeds(){ return save.breeds; }, toLocal, get G(){ return G; }, get T(){ return T; }, groundY, palAt, ZONES, zoneIdx, BED, toWorld, get MOUNTS(){ return MOUNTS; }, PX_PER_M, skyImage,
   get scale(){ return scale; }, get VW(){ return VW; }, get VH(){ return VH; }, get dpr(){ return dpr; }, horizon, COVER,
   ensureTerrain(){ if (!T){ newTerrain(20261106); extendTerrain(400); } } };
 })();

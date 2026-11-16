@@ -331,7 +331,7 @@ function chickenModel(){
   for (const s of [-1, 1]){ const w = mesh(GEO.ico, cream); w.scale.set(5, 3.2, 1.4); w.position.set(-1, .6, s * 5.2); g.add(w); wings.push(w); }
   const legs = [];
   for (const s of [-1, 1]){ const l = mesh(GEO.cyl6, orange); l.scale.set(.6, 4, .6); l.position.set(0, -7, s * 1.8); g.add(l); legs.push(l); }
-  g.userData = { wings, legs };
+  g.userData = { wings, legs, white, cream, breed: 'white' };
   return g;
 }
 function wheelModel(R, kind){
@@ -418,7 +418,13 @@ function egg(i){ while (eggPool.length <= i){ const m = new THREE.Mesh(eggGeo, e
 const shadowGeo = new THREE.CircleGeometry(1, 24).rotateX(-Math.PI / 2);
 const shadowPool = [];
 function shadowAt(i){ while (shadowPool.length <= i){ const m = new THREE.Mesh(shadowGeo, new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: .3, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 })); m.renderOrder = 1; scene.add(m); shadowPool.push(m); } return shadowPool[i]; }
-function hen(i){ while (henPool.length <= i){ const h = chickenModel(); scene.add(h); henPool.push(h); } return henPool[i]; }
+function hen(i, breed = 'white'){
+  while (henPool.length <= i){ const h = chickenModel(); scene.add(h); henPool.push(h); }
+  const h = henPool[i], u = h.userData;
+  // each pooled chicken owns its materials, so a breed is just a recolour (only done when it changes)
+  if (u.breed !== breed && H.breedOf){ const b = H.breedOf(breed); u.white.color.set(b.body); u.cream.color.set(b.wing); u.breed = breed; }
+  return h;
+}
 const coinGeo = new THREE.CylinderGeometry(8.5, 8.5, 2.6, 18), coinMat = new THREE.MeshStandardMaterial({ color: 0xffc62e, roughness: .3, metalness: .55, emissive: 0xb87400, emissiveIntensity: .55 });
 const coinPool = [];
 function coin(i){ while (coinPool.length <= i){ const c = mesh(coinGeo, coinMat); c.rotation.x = Math.PI / 2; const w = new THREE.Group(); w.add(c); scene.add(w); coinPool.push(w); } return coinPool[i]; }
@@ -626,7 +632,7 @@ function render(camX, camY, sx = 0, sy = 0, now = performance.now() / 1000){
     const m = menuPose(V, camX - (VW / k) * .31, now);
     placeTruck(V, m.c, m.wheels, 15, night);
     for (let i = 0; i < 4; i++){
-      const h = hen(henI++), lx = H.BED.x0 + 9 + i * 13, hop = Math.max(0, Math.sin(now * 7 + i * 1.9)) * 7;
+      const h = hen(henI++, H.breeds ? H.breeds[H.breeds.length - 1 - (i % H.breeds.length)] : "white"), lx = H.BED.x0 + 9 + i * 13, hop = Math.max(0, Math.sin(now * 7 + i * 1.9)) * 7;
       const p = local(m.c, lx, H.BED.floor - 7 - hop);
       h.visible = true; h.position.set(p.x, -p.y, (hash(i) - .5) * 22); h.rotation.set(0, 0, -m.c.a);
       h.userData.wings.forEach((w, s) => w.rotation.x = (s ? 1 : -1) * (hop > 3 ? Math.sin(now * 40) * 1.1 : 0));
@@ -638,7 +644,7 @@ function render(camX, camY, sx = 0, sy = 0, now = performance.now() / 1000){
     placeTruck(V, c, G.wheels, G.S.wall, night);
     // chickens: in the crate, flying, or wandering on the road
     for (const e of G.hens){
-      const h = hen(henI++); h.visible = true;
+      const h = hen(henI++, e.breed); h.visible = true;
       const zOff = (hash(e.id * 7.31) - .5) * 22;
       h.position.set(e.x, -e.y, e.aboard ? zOff : zOff * 1.6);
       const tilt = e.aboard ? -c.a : Math.sin(now * 9 + e.id * 10) * .5;
@@ -652,7 +658,7 @@ function render(camX, camY, sx = 0, sy = 0, now = performance.now() / 1000){
     for (const hp of G.hoppers){
       if (hp.t < 0) continue;
       const kk = Math.min(1, hp.t / hp.dur), x = hp.x0 + (hp.x1 - hp.x0) * kk, y = hp.y0 + (hp.y1 - hp.y0) * kk - Math.sin(kk * Math.PI) * 46;
-      const h = hen(henI++); h.visible = hp.dur + 1.6 - hp.t > 0; h.position.set(x, -y, -40 * kk); h.rotation.set(0, 0, 0);
+      const h = hen(henI++, hp.breed); h.visible = hp.dur + 1.6 - hp.t > 0; h.position.set(x, -y, -40 * kk); h.rotation.set(0, 0, 0);
       h.userData.wings.forEach((w, s) => w.rotation.x = (s ? 1 : -1) * (kk < 1 ? Math.sin(hp.t * 30) : 0));
     }
   }
@@ -742,7 +748,87 @@ function preview(V){
   sc.remove(g); g.traverse(o => { if (o.geometry && !Object.values(GEO).includes(o.geometry) && o.geometry !== coinGeo) o.geometry.dispose(); });
   return url;
 }
+// a breed's portrait for the Garage and the hatch card: one chicken, close up, in the same studio as the trucks
+function henPreview(breed){
+  if (!pv) preview(H.vehicle());            // sets up the studio renderer
+  const { r, sc, cam, ground, canvas } = pv;
+  const h = chickenModel(), b = H.breedOf(breed);
+  h.userData.white.color.set(b.body); h.userData.cream.color.set(b.wing);
+  h.rotation.y = -.55; sc.add(h);
+  ground.position.y = -11;
+  r.setSize(220, 186, false); cam.aspect = 220 / 186; cam.updateProjectionMatrix();
+  cam.position.set(16, 12, 50); cam.lookAt(1, 1, 0);
+  r.render(sc, cam);
+  const url = canvas.toDataURL();
+  sc.remove(h);
+  r.setSize(300, 186, false); cam.aspect = 300 / 186; cam.updateProjectionMatrix();
+  return url;
+}
 glCanvas.addEventListener('webglcontextlost', e => { e.preventDefault(); window.World3D = null; glCanvas.style.display = 'none'; dispatchEvent(new Event('world3dfail')); });   // the 2D game takes over
-window.World3D = { preview, ok: true, render, scene, camera, far, terrain, THREE, Q, setQuality, buildTerrain, buildFar };
+// ---------- cover art only: a panicked hero chicken and the truck cresting a hill, rendered large on transparent backgrounds ----------
+// (used by _tools/hero.html; never called during play)
+function coverParts(opt = {}){
+  const W = opt.w || 1200, Hh = opt.h || 1200;
+  const canvas = document.createElement('canvas');
+  const r = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+  r.setPixelRatio(1); r.setSize(W, Hh, false); r.outputColorSpace = THREE.SRGBColorSpace; r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.15;
+  r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
+  const sc = new THREE.Scene(); sc.environment = scene.environment; sc.environmentIntensity = .5;
+  sc.add(new THREE.HemisphereLight(0xeef6ff, 0x7a9a50, 1.5));
+  const d = new THREE.DirectionalLight(0xfff0d6, 2.8); d.position.set(140, 260, 240); d.castShadow = true; d.shadow.mapSize.set(2048, 2048);
+  Object.assign(d.shadow.camera, { left: -200, right: 200, top: 200, bottom: -200, near: 10, far: 900 }); sc.add(d);
+  const cam = new THREE.PerspectiveCamera(24, W / Hh, 5, 3000);
+  const shot = () => { r.render(sc, cam); return canvas.toDataURL('image/png'); };
+  const out = {};
+
+  // 1. the hero: wide white eyes, beak wide open, wings flung up, legs kicking
+  {
+    const h = chickenModel(), u = h.userData, b = H.breedOf(opt.breed || 'white');
+    u.white.color.set(b.body); u.cream.color.set(b.id === 'white' ? '#fffaf0' : b.wing);
+    u.white.emissive.set(0x2c2822); u.cream.emissive.set(0x2c2822);                       // a touch of fill so the hero never reads grey
+    h.children.forEach(c => { if (c.geometry === GEO.cone5 && c.scale.y === 4) c.visible = false; });         // the closed beak
+    const eyeW = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .25 }), pupil = new THREE.MeshStandardMaterial({ color: 0x140c06, roughness: .2 });
+    h.children.forEach(c => { if (c.material && c.material.color && c.material.color.getHex() === 0x1b120a) c.visible = false; });   // the dot eyes
+    for (const s of [-1, 1]){
+      const e = mesh(GEO.ico1, eyeW, false); e.scale.setScalar(1.75); e.position.set(6.3, 6.3, s * 2.6); h.add(e);
+      const p = mesh(GEO.ico1, pupil, false); p.scale.setScalar(.72); p.position.set(7.7, 6.5, s * 3.05); h.add(p);
+    }
+    const orange = new THREE.MeshStandardMaterial({ color: 0xf5a10f, roughness: .5 }), mouth = new THREE.MeshStandardMaterial({ color: 0x4a0c08, roughness: .8 });
+    const up = mesh(GEO.cone5, orange); up.scale.set(1.9, 4.6, 1.9); up.rotation.z = -Math.PI / 2 + .42; up.position.set(9.8, 5.8, 0); h.add(up);
+    const lo = mesh(GEO.cone5, orange); lo.scale.set(1.6, 3.8, 1.6); lo.rotation.z = -Math.PI / 2 - .5; lo.position.set(9.4, 3.2, 0); h.add(lo);
+    const m = mesh(GEO.ico1, mouth, false); m.scale.set(.7, 1.1, .9); m.position.set(8.4, 4.6, 0); h.add(m);
+    u.wings.forEach((w, s) => { w.rotation.x = (s ? 1 : -1) * 1.15; w.rotation.z = .5; w.position.y += 2.5; });
+    u.legs.forEach((l, s) => { l.rotation.z = s ? .55 : -.25; l.rotation.x = (s ? 1 : -1) * .25; });
+    h.rotation.set(.05, -.95, .22);
+    sc.add(h);
+    cam.position.set(20, 6, 64); cam.lookAt(1.5, 1.8, 0);
+    out.hen = shot(); sc.remove(h);
+  }
+
+  // 2. the truck nosing up over a crest, three chickens in the crate, seen from the front three-quarter
+  {
+    const V = VEHICLES_FOR_COVER(opt.truck), g = new THREE.Group(); sc.add(g);
+    const t = truckModel(V, g), ud = t.userData, BED = H.BED, wall = 15;
+    ud.tail.scale.y = wall + 12; ud.tail.position.set(BED.x0 - 2, -(BED.floor - wall + (wall + 12) / 2), 0);
+    for (const rl of ud.rails){ rl.scale.y = wall * .55; rl.position.set((BED.x0 + BED.x1) / 2, -(BED.floor - rl.scale.y / 2), rl.position.z); }
+    const halfW = V.id === 'monster' ? 30 : 26;
+    V.mounts.forEach(([mx, my], i) => {
+      const wy = -(my + V.rest);
+      ud.wheels[i].forEach((w, s2) => { w.position.set(mx, wy, (s2 ? 1 : -1) * halfW); w.rotation.z = -.4 - i; });
+      ud.struts[i].forEach((st, s2) => { st.scale.set(V.id === 'monster' ? 5 : 3.5, V.rest + 4, 3.5); st.position.set(mx, -(my - 4 + (V.rest + 4) / 2), (s2 ? 1 : -1) * (halfW - 9)); });
+    });
+    const breeds = opt.crate || ['white', 'brown', 'golden'];
+    breeds.forEach((id, k) => { const h = chickenModel(), bb = H.breedOf(id); h.userData.white.color.set(bb.body); h.userData.cream.color.set(bb.wing);
+      h.position.set(BED.x0 + 10 + k * 15, -(BED.floor - 7) + (k === 1 ? 3 : 0), (k - 1) * 9); h.rotation.set(0, (k - 1) * .3, k === 1 ? .3 : -.1);
+      h.userData.legs.forEach(l => l.visible = false); h.userData.wings.forEach((w, s) => w.rotation.x = (s ? 1 : -1) * (k === 1 ? .9 : .3)); g.add(h); });
+    g.rotation.z = .2;                                          // nose up: cresting the hill
+    cam.position.set(150, 40, 300); cam.lookAt(4, 4, 0);
+    out.truck = shot(); sc.remove(g);
+  }
+  r.dispose();
+  return out;
+}
+const VEHICLES_FOR_COVER = id => { const v = H.vehicle(); if (!id || id === v.id) return v; return (H.VEHICLES || []).find(x => x.id === id) || v; };
+window.World3D = { preview, henPreview, coverParts, ok: true, render, scene, camera, far, terrain, THREE, Q, setQuality, buildTerrain, buildFar };
 dispatchEvent(new Event('world3d'));
 }
